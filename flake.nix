@@ -11,15 +11,16 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Phase 0 deps only. Phase 2+ (brain/training work) will add
-        # torch, numpy, pyyaml, etc. here once that starts — same list
-        # requirements.txt tracks for non-Nix machines.
+        # Phase 0/1 deps. Phase 2+ (brain/training work) will add torch,
+        # numpy, etc. here once that starts — same list requirements.txt
+        # tracks for non-Nix machines.
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [
           evdev  # virtual gamepad via /dev/uinput — nixpkgs builds this
                  # properly against the running kernel's headers, unlike
                  # the evdev-binary workaround requirements.txt needs for
                  # a plain venv on this machine (see docs/risks.md).
           pillow # decode PNG frames from grim
+          pyyaml # configs/*.yaml (env/config_loader.py)
         ]);
       in
       {

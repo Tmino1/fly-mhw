@@ -1,5 +1,5 @@
-# Phase 0 — tooling spike deps only.
-# Phase 2+ will add torch, numpy, pyyaml, etc. once the brain work starts.
+# Phase 0/1 deps. Phase 2+ will add torch, numpy, etc. once the brain
+# work starts.
 
 # evdev-binary, not evdev: plain `evdev` builds a C extension against
 # /usr/include/linux/input.h, which this NixOS machine doesn't have in the
@@ -7,3 +7,4 @@
 # same `import evdev` API.
 evdev-binary>=1.7  # virtual gamepad via /dev/uinput (env/game_interface/input_injector.py)
 Pillow>=10.0       # decode PNG frames from grim (env/game_interface/capture.py)
+PyYAML>=6.0        # configs/*.yaml (env/config_loader.py)

@@ -32,10 +32,23 @@ the live game:
   0 blocker, but worth doing before Phase 1's environment loop needs
   real throughput.
 
-**Next up: Phase 1** — build the actual `MHWEnv` (`reset()`/`step()`) and
-write the first `configs/weapons/greatsword.yaml` /
-`configs/monsters/great_jagras.yaml`. See
-[`docs/architecture.md`](docs/architecture.md) for the roadmap.
+**Phase 1 (MHWEnv + configs) — built, not yet run live.** `MHWEnv`,
+`action_space.py`, `reward.py`, and the Great Sword / Great Jagras configs
+exist and pass offline tests (config loading, a 7-case reward-logic
+fixture suite, `MHWEnv` construction) — see `docs/architecture.md`'s Phase
+1 decisions table. Two things are real guesses until verified against the
+live game:
+
+- Great Sword's button mapping (`configs/weapons/greatsword.yaml`) — only
+  `dodge` is confirmed; run `scripts/verify_action_mapping.py` first.
+- `quest.state`'s real values are unknown — episode-boundary logic
+  deliberately doesn't depend on them (see `docs/risks.md`), but
+  `scripts/run_dummy_policy.py --policy idle` through a real quest will
+  reveal them.
+
+Recommended order: `verify_action_mapping.py` → `run_dummy_policy.py
+--policy idle` (one full quest) → `run_dummy_policy.py --policy random`
+(the actual crash-resistance acceptance test).
 
 ## This machine's environment (recorded 2026-09-14)
 

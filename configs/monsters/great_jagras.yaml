@@ -1,0 +1,49 @@
+# Great Jagras monster config, v1. Reward is necessarily whole-HP-only —
+# Engine_monster.lua (LuaEngine) exposes only health_current/health_max,
+# no per-part HP or break flags (see docs/modding_setup.md).
+schema: "fly-mhw/monster_config/v1"
+name: "Great Jagras"
+
+monster_state_fields:
+  tracked: ["health_current", "health_max", "position"]
+  unavailable: ["per_part_health", "break_flags", "enrage_state"]
+  notes: >
+    Only whole-monster health_current/health_max is available from the
+    bundled LuaEngine modules as of Phase 0. Revisit if a module exposing
+    per-part data is ever found.
+
+identification:
+  strategy: "first_monster"
+  notes: >
+    Phase 1 simplification: assumes a single-monster quest (a solo Great
+    Jagras hunt) and takes monsters[0] if the list is non-empty. The state
+    JSON has no species field to filter by — GetAllMonster() only returns
+    a per-instance Id, species vs. instance is unconfirmed. Revisit if a
+    multi-monster quest is ever run against this config.
+
+reward:
+  hp_delta_normalization: "fraction_of_max"  # deltas are delta_hp / hp_max, so weights are HP-scale-independent
+  monster_hp_lost_weight: 1.0    # + reward per fraction of monster max-HP lost this step
+  player_hp_lost_weight: -1.0    # - reward per fraction of player max-HP lost this step
+  step_penalty: -0.001           # small constant per-step cost, discourages stalling
+  terminal:
+    monster_defeated_bonus: 10.0
+    player_cart_penalty: -10.0
+    quest_ended_unknown_reward: 0.0  # episode ended for a reason we can't yet classify — see episode_boundaries notes
+    near_zero_hp_threshold: 0.01     # monster's last known HP fraction below this counts as "defeated" when the
+                                      # monster list empties — HP is a float read from game memory, real "death" may
+                                      # never land on exactly 0.0, so this needs a small tolerance, not an exact check
+
+episode_boundaries:
+  start_signal: "quest_id_transitions_from_neg1"
+  end_signal: "monsters_emptied_or_player_zero_hp"
+  max_episode_steps: 3000
+  notes: >
+    quest.state's real enum values are UNCONFIRMED — only the idle value
+    (0, no active quest) has ever been observed (see
+    docs/modding_setup.md). Boundary logic intentionally does NOT read
+    quest.state. It IS logged into every step's info dict during Phase 1
+    so real transitions can be read back after a live run
+    (scripts/run_dummy_policy.py --policy idle) and folded into a v2
+    schema once known, distinguishing win/fail/abandon instead of the
+    current single "quest_ended_unknown" bucket.

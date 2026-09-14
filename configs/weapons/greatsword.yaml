@@ -1,0 +1,75 @@
+# Great Sword action space, v1 — a minimal first pass, not a finished
+# moveset. Deliberately excludes charge levels, tackle, camera control,
+# and triggers/shoulder buttons beyond one guessed sheathe action.
+#
+# `verified` tracks whether this action's button/axis mapping has been
+# confirmed against the live game. Only `dodge` is verified so far — it's
+# the same BTN_SOUTH tap confirmed working in Phase 0 (landed as MHW's
+# menu-confirm action). Everything else is a best-guess default Xbox
+# scheme from web research (see docs/risks.md), NOT confirmed on this
+# install. Run scripts/verify_action_mapping.py before trusting any
+# unverified action, and update its `code`/`verified` fields by hand
+# based on what you observe.
+schema: "fly-mhw/weapon_config/v1"
+name: "Great Sword"
+weapon_type_id: 0  # confirmed empirically against player.weapon_type — see docs/risks.md
+
+# Axes this weapon's action space drives. Camera (right stick) isn't
+# driven by the policy in Phase 1.
+controlled_axes: ["ABS_X", "ABS_Y"]
+
+actions:
+  - name: idle
+    axes: {ABS_X: 0, ABS_Y: 0}
+    buttons: []
+    verified: true
+    notes: "No-op baseline; sticks recentered to neutral."
+
+  - name: move_forward
+    axes: {ABS_X: 0, ABS_Y: -32767}
+    buttons: []
+    verified: false
+    notes: "Left-stick forward, standard-gamepad sign convention assumed. Unverified against MHW's camera-relative movement."
+
+  - name: move_backward
+    axes: {ABS_X: 0, ABS_Y: 32767}
+    buttons: []
+    verified: false
+
+  - name: strafe_left
+    axes: {ABS_X: -32767, ABS_Y: 0}
+    buttons: []
+    verified: false
+
+  - name: strafe_right
+    axes: {ABS_X: 32767, ABS_Y: 0}
+    buttons: []
+    verified: false
+
+  - name: attack_1
+    axes: {ABS_X: 0, ABS_Y: 0}
+    buttons:
+      - {code: BTN_NORTH, op: tap, hold_seconds: 0.05}
+    verified: false
+    notes: "Y — attack 1 (Great Sword overhead slash / charge start), per web-researched default Xbox scheme. Unverified against this install."
+
+  - name: attack_2
+    axes: {ABS_X: 0, ABS_Y: 0}
+    buttons:
+      - {code: BTN_EAST, op: tap, hold_seconds: 0.05}
+    verified: false
+    notes: "B — attack 2. Unverified."
+
+  - name: dodge
+    axes: {ABS_X: 0, ABS_Y: 0}
+    buttons:
+      - {code: BTN_SOUTH, op: tap, hold_seconds: 0.1}
+    verified: true
+    notes: "A/South — confirmed live in Phase 0 as MHW's menu-confirm action. In-hunt dodge behavior specifically hasn't been separately confirmed, only that the button press reaches the game."
+
+  - name: sheathe_unsheathe
+    axes: {ABS_X: 0, ABS_Y: 0}
+    buttons:
+      - {code: BTN_TL, op: tap, hold_seconds: 0.1}
+    verified: false
+    notes: "Lowest-confidence entry — pure guess. Not load-bearing for the Phase 1 loop; drop this action entirely if verification shows it's wrong and no quick correction is found."

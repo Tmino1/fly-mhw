@@ -5,11 +5,18 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **`weapon_type`/`weapon_id` don't have a known id→name mapping yet.**
-  Confirmed readable (current test character: `weapon_type=5`,
-  `weapon_id=234`) but unconfirmed whether `5` is actually the Great
-  Sword. Needed before writing `configs/weapons/greatsword.yaml` in
-  Phase 1.
+- **Great Sword's action-space button mapping is unverified.** Only
+  `dodge` (`BTN_SOUTH`) is confirmed — `attack_1`/`attack_2`/
+  `sheathe_unsheathe`/movement in `configs/weapons/greatsword.yaml` are a
+  best-guess default Xbox scheme from web research, not confirmed on this
+  install. Run `scripts/verify_action_mapping.py` before trusting them.
+- **`quest.state`'s real enum values are still unobserved.** Only the
+  idle value (`0`, no active quest) has ever been seen. Phase 1's episode-
+  boundary logic (`env/reward.py`) deliberately doesn't depend on this —
+  it's logged into every step's `info` dict instead. Run
+  `scripts/run_dummy_policy.py --policy idle` through a real quest to find
+  out what the real values are, then update this entry and consider a v2
+  monster-config schema with a proper win/fail/abandon distinction.
 - **Per-part monster HP / break flags are not in the bundled API.** Only
   whole-monster `health_current`/`health_max` is exposed by
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
@@ -86,3 +93,6 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   Once landing correctly, `BTN_SOUTH` taps acted as the menu "confirm"
   button (expected — A/South is the standard confirm button in MHW's
   menus, so this is confirmation the mapping is *right*, not wrong).
+- ~~`weapon_type`/`weapon_id` id→name mapping~~ — resolved 2026-09-14,
+  confirmed empirically by swapping weapons in-game and reading
+  `player.weapon_type`: `0` = Great Sword, `5` = Hunting Horn.
