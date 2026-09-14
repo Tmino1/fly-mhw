@@ -15,9 +15,6 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
   rewards will need either a raw memory offset (cross-reference a
   community Cheat Engine table) or a module this project hasn't read yet.
-- **Input-injection detection / anti-cheat.** Untested whether MHW's client
-  (or Steam) flags or blocks injected virtual-gamepad input. Test
-  cautiously, in single-player, before relying on it.
 - **`grim`-based capture is too slow as-is.** Measured 2026-09-14:
   ~2.4 fps sustained (10-frame average), and a 116-second outlier on the
   very first call in-process (possibly a one-time portal/compositor
@@ -78,3 +75,14 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   `docs/modding_setup.md`.
 - ~~Where relative-path writes land under Proton~~ — resolved 2026-09-14:
   directly in the MHW install directory, next to `MonsterHunterWorld.exe`.
+- ~~Input-injection detection / anti-cheat / whether it reaches the game
+  at all~~ — resolved 2026-09-14: confirmed working. Root cause of the
+  first failed attempt was a timing bug, not detection/blocking — see
+  `scripts/verify_input_injection.py`'s v2 (holds the pad open long
+  enough for Wine/SDL hotplug detection instead of tapping once and
+  immediately closing). Confirmed at the OS level too:
+  `udevadm info` shows `ID_INPUT_JOYSTICK=1` and bus type `0003` (USB)
+  matching a real Xbox 360 pad. No anti-cheat friction observed.
+  Once landing correctly, `BTN_SOUTH` taps acted as the menu "confirm"
+  button (expected — A/South is the standard confirm button in MHW's
+  menus, so this is confirmation the mapping is *right*, not wrong).

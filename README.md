@@ -15,21 +15,27 @@ config, not code — see the roadmap's Design Principles before adding either.
 
 ## Status
 
-Phase 0 (tooling spike) — in progress.
+**Phase 0 (tooling spike) — done.** Both verification scripts pass against
+the live game:
 
-- ✅ `grim`-based capture and the `evdev` virtual gamepad both work
-  end-to-end on this machine (see `docs/risks.md` for measured numbers —
-  capture is currently slow, ~2.4 fps, until cropped to just the game
-  window — see [`docs/performance_tuning.md`](docs/performance_tuning.md)).
-- ✅ LuaEngine is installed, `lua_scripts/state_reader.lua` is confirmed
-  **working live**: `reload state_reader` + `verify_state_read.py` prints a
-  fresh, correct player/monster/quest snapshot every second (see
-  `docs/modding_setup.md` for the one real bug found and fixed along the
-  way — a broken repeat-write timer).
-- ⬜ **Only remaining Phase 0 item:** input injection has been verified to
-  construct/close a virtual pad, but **not yet verified against the actual
-  running game** — run `scripts/verify_input_injection.py` with MHW
-  focused to check.
+- ✅ `state_reader.lua` writes a fresh, correct player/monster/quest
+  snapshot every second (`docs/modding_setup.md` has the one real bug
+  found and fixed along the way — a broken repeat-write timer).
+- ✅ The virtual gamepad reaches the game — confirmed via MHW's menu
+  "confirm" action landing on repeated South-button taps
+  (`docs/risks.md` has the timing bug that caused the first failed
+  attempt, and the OS-level udev diagnostics that ruled out
+  detection/anti-cheat as the cause).
+- ⚠️ `grim`-based capture works but is slow (~2.4 fps) until cropped to
+  just the game window — see
+  [`docs/performance_tuning.md`](docs/performance_tuning.md). Not a Phase
+  0 blocker, but worth doing before Phase 1's environment loop needs
+  real throughput.
+
+**Next up: Phase 1** — build the actual `MHWEnv` (`reset()`/`step()`) and
+write the first `configs/weapons/greatsword.yaml` /
+`configs/monsters/great_jagras.yaml`. See
+[`docs/architecture.md`](docs/architecture.md) for the roadmap.
 
 ## This machine's environment (recorded 2026-09-14)
 
