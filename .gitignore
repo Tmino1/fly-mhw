@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 /tmp_capture/
 *.state.json
+
+# nix build output symlink, if ever used
+result
+result-*

@@ -37,15 +37,27 @@ Phase 0 (tooling spike) — in progress.
   (Proton, appid 582010)
 - Stracker's Loader: **installed** (`loader.dll`, `dinput8.dll`,
   `loader-config.json`, 3 plugins already in `nativePC/plugins/`)
-- LuaEngine: **not installed** — no matching files found anywhere on the
-  filesystem. Needs to be downloaded and dropped in; see
-  `docs/modding_setup.md`.
+- LuaEngine: **installed** (`nativePC/plugins/LuaEngine.dll`,
+  `Lua/Engine.lua` + `Lua/modules/`) — see `docs/modding_setup.md`.
 - Desktop: Hyprland (wlroots, Wayland) — `mss`/X11-style capture will not
   work here; using `grim` instead (see `env/game_interface/capture.py`).
 - `/dev/uinput` already has an ACL entry granting the current user rw access
   — no extra permission setup needed for the virtual-gamepad input backend.
 
 ## Setup
+
+This machine is NixOS — use the flake, it's the recommended path here:
+
+```sh
+nix develop
+```
+
+Gives you Python with `evdev`/`Pillow` (built properly against the running
+kernel, unlike the `pip`-in-a-venv route — see `docs/risks.md`), plus
+`grim`/`slurp`/`wf-recorder`/`gamescope` on `PATH`.
+
+For a non-Nix machine (e.g. if training ends up running elsewhere), the
+portable fallback is still:
 
 ```sh
 python3 -m venv .venv
@@ -55,9 +67,10 @@ pip install -r requirements.txt
 
 ## Phase 0 verification
 
-Once LuaEngine is installed and `lua_scripts/state_reader.lua` is dropped
-into the game's `Lua/` folder and loaded (`reload state_reader` in the
-in-game chat):
+`lua_scripts/state_reader.lua` is already installed to the game's `Lua/`
+folder. Launch MHW, open the in-game chat (Insert by default — works in
+single-player too, LuaEngine repurposes the local text box as a command
+console) and run `reload state_reader`. Then, from a `nix develop` shell:
 
 ```sh
 python scripts/verify_state_read.py
