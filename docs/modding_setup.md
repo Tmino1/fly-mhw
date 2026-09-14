@@ -76,22 +76,36 @@ Key facts, for the next person extending it:
   stays the plan; not chasing the websocket idea further without a
   concrete reason to.
 
-## Remaining open question
+## Runtime, confirmed working (2026-09-14)
 
-- **Runtime behavior is still unverified.** The API shape above is
-  confirmed from source, but `state_reader.lua` hasn't actually been
-  `reload`ed in a running game yet. Do that, then:
-  ```sh
-  python scripts/verify_state_read.py
-  ```
-  should start printing monster/player/quest state read from the file it
-  writes (see the script's header comment for `OUTPUT_PATH`, and note
-  under Proton where a relative-path write actually lands on the Linux
-  filesystem is still unconfirmed — check both the MHW install dir and
-  `$HOME`, per `verify_state_read.py`'s default search).
+`reload state_reader` + `python scripts/verify_state_read.py` now prints a
+fresh snapshot every second, continuously. Along the way, one real bug
+was found and fixed:
 
-Update this doc once that's run — this is meant to be a living doc, not a
-one-time note.
+- **v1 wrote the file exactly once and then stopped.** It used LuaEngine's
+  `Chronoscope` cooldown helpers (`AddChronoscope`/`CheckChronoscope`/
+  `CheckPresenceChronoscope`) for the repeat-write timer, copying the
+  pattern from the bundled `dataview.lua` example — but `on_time()` wasn't
+  wrapped in `pcall`, so when one of those calls threw on the second tick
+  (their exact behavior was inferred from a single usage example, never
+  confirmed), the uncaught error silently killed all further `on_time()`
+  calls for the script. **v2** replaced this with plain `os.time()`
+  interval-gating (confirmed working — it's what produced the correct
+  `written_at` timestamp even in the broken v1) and wrapped the whole
+  `on_time()` body in `pcall`, surfacing any error via `Console_Error()` so
+  it's visible in-game instead of silently stopping.
+- Relative-path writes from the game process land directly in the MHW
+  install directory under Proton — `fly_mhw_state.json` appears right next
+  to `MonsterHunterWorld.exe`. Confirmed, no longer an open question.
+- A real snapshot outside any quest looks like: `quest.id = -1`,
+  `quest.state = 0`, `monsters = []` (all as expected with nothing
+  active), and real player data (`health_current`/`health_max` = 150/150,
+  `stamina_current`/`stamina_max` = 100/100, `weapon_type = 5`,
+  `weapon_id = 234`). **Open item for Phase 1:** need a `weapon_type`
+  id→name mapping (is `5` actually the Great Sword? unconfirmed) before
+  writing `configs/weapons/greatsword.yaml`.
+
+This is meant to be a living doc — keep updating it as Phase 1 finds more.
 
 ## Input injection note (Steam Input)
 

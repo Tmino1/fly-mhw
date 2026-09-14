@@ -4,22 +4,24 @@
   Written against the REAL LuaEngine API — read directly out of the
   installed Lua/Engine.lua and Lua/modules/Engine_{player,monster,quest}.lua
   (see docs/modding_setup.md for how those were found), not guessed. API
-  shape is confirmed from source; this script's actual behavior in-game is
-  still unverified — run it and check with scripts/verify_state_read.py.
+  shape confirmed from source AND confirmed working in-game (v1, 2026-09-14
+  — a snapshot with correct player HP/stamina/weapon data was written), but
+  v1's Chronoscope-based repeat-write timer turned out to be broken (wrote
+  exactly once, never again — see on_time() below for the v2 fix and the
+  likely root cause).
 
   Install: drop this file in the game's `Lua/` folder, then in the
   in-game chat:
       reload state_reader
 
-  What it does: once a second (via LuaEngine's own Chronoscope
-  cooldown/timer helper — see on_time() below), dumps a JSON snapshot of
-  the player, all known monsters, and the current quest to a file, so the
-  Python side (env/game_interface/lua_bridge.py) can poll it.
+  What it does: once a second (os.time()-gated — see on_time() below),
+  dumps a JSON snapshot of the player, all known monsters, and the
+  current quest to a file, so the Python side
+  (env/game_interface/lua_bridge.py) can poll it.
 ]]
 
 local OUTPUT_PATH = "fly_mhw_state.json"
 local WRITE_INTERVAL_SECONDS = 1
-local CHRONOSCOPE_TAG = "fly_mhw_state_write"
 
 -- Minimal JSON encoder for the specific shapes this script produces
 -- (nested tables of strings/numbers/booleans/arrays). Not general-purpose
@@ -155,17 +157,35 @@ local function write_snapshot()
   -- thing to check.
 end
 
+local last_write_time = 0
+
 function on_init()
   Data_Player = engine.Player:new()
   Data_Quest = engine.Quest:new()
+  last_write_time = os.time()
 end
 
--- LuaEngine's own cooldown/timer helper (used the same way in the bundled
--- dataview.lua example for debouncing a keypress) — avoids guessing at
--- on_time()'s call frequency or reimplementing timing with os.clock().
+-- v1 used LuaEngine's Chronoscope cooldown helpers here (matching the
+-- bundled dataview.lua example) — confirmed BROKEN in practice: the file
+-- was written exactly once (on_init/the first on_time call) and never
+-- again. Most likely explanation: on_time() itself wasn't wrapped in
+-- pcall, so if CheckChronoscope/CheckPresenceChronoscope/AddChronoscope
+-- threw on a later call (their real signature/behavior was inferred from
+-- a single usage example, not confirmed), the uncaught error silently
+-- killed all future on_time() calls for this script. Switched to
+-- os.time() (confirmed working — it's what produced the correct
+-- written_at timestamp in that one successful write) with the whole body
+-- wrapped in pcall, and errors now get surfaced via Console_Error() so
+-- they're visible in-game instead of silently stopping the hook.
 function on_time()
-  if CheckChronoscope(CHRONOSCOPE_TAG) or not CheckPresenceChronoscope(CHRONOSCOPE_TAG) then
-    AddChronoscope(WRITE_INTERVAL_SECONDS, CHRONOSCOPE_TAG)
-    write_snapshot()
+  local ok, err = pcall(function()
+    local now = os.time()
+    if now - last_write_time >= WRITE_INTERVAL_SECONDS then
+      last_write_time = now
+      write_snapshot()
+    end
+  end)
+  if not ok then
+    Console_Error("fly-mhw state_reader on_time error: " .. tostring(err))
   end
 end

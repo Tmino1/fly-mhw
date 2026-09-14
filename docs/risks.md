@@ -5,11 +5,11 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **`state_reader.lua` hasn't been run against a live game yet.** Its API
-  usage is now confirmed correct from LuaEngine's own source (see
-  `docs/modding_setup.md`), rewritten from the earlier guessed version —
-  but nobody has actually `reload`ed it in-game and checked
-  `scripts/verify_state_read.py`'s output. Do that next.
+- **`weapon_type`/`weapon_id` don't have a known id→name mapping yet.**
+  Confirmed readable (current test character: `weapon_type=5`,
+  `weapon_id=234`) but unconfirmed whether `5` is actually the Great
+  Sword. Needed before writing `configs/weapons/greatsword.yaml` in
+  Phase 1.
 - **Per-part monster HP / break flags are not in the bundled API.** Only
   whole-monster `health_current`/`health_max` is exposed by
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
@@ -68,3 +68,13 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   player/monster/quest/world all confirmed by reading the installed
   `Lua/Engine.lua` and `Lua/modules/Engine_*.lua` source directly, and
   `state_reader.lua` rewritten against them. See `docs/modding_setup.md`.
+- ~~`state_reader.lua` hadn't been run against a live game~~ — resolved
+  2026-09-14: `reload state_reader` + `verify_state_read.py` now prints a
+  fresh, correct snapshot every second. Found and fixed a real bug along
+  the way: v1's `Chronoscope`-based repeat-write timer wrote the file
+  exactly once and then silently died (an uncaught error in an
+  un-`pcall`'d `on_time()`, most likely) — v2 uses plain `os.time()`
+  gating with the whole body wrapped in `pcall`. See
+  `docs/modding_setup.md`.
+- ~~Where relative-path writes land under Proton~~ — resolved 2026-09-14:
+  directly in the MHW install directory, next to `MonsterHunterWorld.exe`.
