@@ -5,14 +5,16 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **LuaEngine not installed.** Confirmed by filesystem search on
-  2026-09-14. Blocks all structured-state work until installed. See
-  `docs/modding_setup.md`.
-- **LuaEngine's actual state coverage is unverified.** Unknown whether
-  per-monster/per-part HP is available through the documented `engine` API
-  or needs raw memory offsets (cross-referencing community Cheat Engine
-  tables). Won't know until it's installed and `state_reader.lua` is
-  actually run.
+- **`state_reader.lua` hasn't been run against a live game yet.** Its API
+  usage is now confirmed correct from LuaEngine's own source (see
+  `docs/modding_setup.md`), rewritten from the earlier guessed version —
+  but nobody has actually `reload`ed it in-game and checked
+  `scripts/verify_state_read.py`'s output. Do that next.
+- **Per-part monster HP / break flags are not in the bundled API.** Only
+  whole-monster `health_current`/`health_max` is exposed by
+  `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
+  rewards will need either a raw memory offset (cross-reference a
+  community Cheat Engine table) or a module this project hasn't read yet.
 - **Input-injection detection / anti-cheat.** Untested whether MHW's client
   (or Steam) flags or blocks injected virtual-gamepad input. Test
   cautiously, in single-player, before relying on it.
@@ -58,3 +60,11 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   evdev` API).
 - ~~Stracker's Loader install~~ — resolved (was already installed and
   working before this project started).
+- ~~LuaEngine install~~ — resolved 2026-09-14: installed via the Nexus
+  Mods Main file. `nativePC/plugins/LuaEngine.dll` present, `Lua/Engine.lua`
+  + `Lua/modules/Engine_*.lua` present.
+- ~~LuaEngine API guesswork~~ — resolved 2026-09-14: real hook names
+  (`on_init`/`on_time`/`on_imgui`/...) and real field paths for
+  player/monster/quest/world all confirmed by reading the installed
+  `Lua/Engine.lua` and `Lua/modules/Engine_*.lua` source directly, and
+  `state_reader.lua` rewritten against them. See `docs/modding_setup.md`.

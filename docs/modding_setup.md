@@ -8,62 +8,90 @@ MHW install: `~/.local/share/Steam/steamapps/common/Monster Hunter World`
 | Component | Status | Evidence |
 |---|---|---|
 | Stracker's Loader | ✅ Installed | `loader.dll`, `dinput8.dll`, `loader-config.json` present at game root; `enablePluginLoader: true` |
-| Plugin loader | ✅ Working | `nativePC/plugins/` already has `CutsceneSkip.dll`, `MonsterLoader.dll`, `QuestLoader.dll` |
-| LuaEngine | ❌ **Not installed** | No matching files found anywhere on the filesystem (searched the whole game dir and a broader filesystem sweep) |
+| Plugin loader | ✅ Working | `nativePC/plugins/` has `CutsceneSkip.dll`, `MonsterLoader.dll`, `QuestLoader.dll` |
+| LuaEngine | ✅ **Installed** (2026-09-14) | `nativePC/plugins/LuaEngine.dll` (+ `LuaEngineUI.dll`, `LuaEngineAudio.dll`); `Lua/Engine.lua` + `Lua/modules/Engine_*.lua` present at game root |
 
-So: the loader that LuaEngine plugs into is ready, but LuaEngine itself still
-needs to be added. (If you set this up on a different machine previously,
-it didn't carry over here — this needs to happen on whichever machine will
-actually run the training loop.)
+Installed by downloading the **Main file** from the
+[Nexus Mods LuaEngine page](https://www.nexusmods.com/monsterhunterworld/mods/6934)
+and unzipping it into the MHW game folder (same folder as
+`MonsterHunterWorld.exe`). That's the whole required install — the "Optional
+Files" section on Nexus is sample scripts, not additional engine components,
+and turned out to already be bundled in the Main file anyway: a
+`可选脚本` ("optional scripts") folder appeared alongside `Lua/`, containing
+`LuaScript/luas.lua` and `数据窗口/dataview.lua` (a full ImGui data-viewer
+example script — see below).
 
-## Installing LuaEngine
+In-game chat commands (confirmed present, from `Lua/Engine.lua`):
+- `luac: <command>` — run a Lua expression immediately, for poking around
+- `reload <script name>` — (re)load a script from `Lua/`
 
-1. Download a release from
-   [HalcyonAlcedo/LuaEngine releases](https://github.com/HalcyonAlcedo/LuaEngine/releases).
-2. Extract it into the MHW game folder (same folder as
-   `MonsterHunterWorld.exe`) — it installs alongside the existing Stracker's
-   Loader setup. This should create a `Lua/` directory at the game root;
-   that's where all `.lua` scripts live.
-3. Launch the game. In the in-game chat, two commands become available:
-   - `luac: <command>` — run a Lua expression immediately, for poking around
-   - `reload <script name>` — (re)load a script from `Lua/`
-4. Drop `lua_scripts/state_reader.lua` (from this repo) into the game's
-   `Lua/` folder, then run `reload state_reader` in chat. It should start
-   writing a state snapshot file (see the script's header comment for the
-   path) roughly once a second.
-5. Confirm from this repo:
-   ```sh
-   python scripts/verify_state_read.py
-   ```
-   It should start printing monster/player state read from that file.
+## The real API (read from source, not guessed)
 
-## Open questions to resolve once LuaEngine is actually running
+`state_reader.lua` was originally written blind, guessing at field names
+and a made-up `OnUpdate(delta_time)` hook. Once LuaEngine was actually
+installed, its real API was readable directly from
+`Lua/Engine.lua` and `Lua/modules/Engine_{player,monster,quest,world}.lua`
+— `state_reader.lua` has since been rewritten against the real thing.
+Key facts, for the next person extending it:
 
-`state_reader.lua` is written against the documented pieces of LuaEngine's
-API (`GetAllMonster()`, `engine.Player:new()`, `CheckKeyIsPressed`) and a
-plain `io.open`-based file IPC, but none of this has been exercised against
-a real running instance yet. Specifically unverified:
+- **Script entry points are**: `on_init()` (once, at load — cache
+  `engine.Player:new()` / `engine.Quest:new()` etc. here), `on_time()`
+  (a per-tick hook — no delta-time argument; use LuaEngine's own
+  `AddChronoscope`/`CheckChronoscope`/`CheckPresenceChronoscope`
+  cooldown-timer helpers to debounce/throttle, not a hand-rolled timer),
+  `on_imgui()` (ImGui drawing, if wanted), `on_monster_create()` /
+  `on_monster_destroy()`, `on_switch_scenes()`. Confirmed by reading the
+  bundled example, `可选脚本/数据窗口/dataview.lua`.
+- `engine.Player:new()` returns a **live metatable-backed proxy** —
+  reading e.g. `.Position.position.x` triggers a fresh memory read every
+  time, so it's safe (and is the intended pattern) to cache the object
+  once in `on_init()` and just keep reading fields off it. Real shape:
+  `.Position.position.{x,y,z}`, `.Characteristic.health.{health_base,
+  health_current,health_max}`, `.Characteristic.stamina.{stamina_current,
+  stamina_max,stamina_eat}`, `.Weapon.{type,id,position,hit}`,
+  `.Armor.{head,chest,arm,waist,leg}`, `.Action.{lmtID,fsm,useItem}`.
+- `GetAllMonster()` returns a table keyed by monster **address** (not an
+  id) with `.Id` as a field on the value — iterate with `pairs`, pass the
+  address key into `engine.Monster:new(address)` per monster (monsters are
+  **not** cached across ticks, unlike the player, since the set of live
+  monsters changes). Real shape: `.Characteristic.{health_current,
+  health_max}` (flat, unlike the player's nested version),
+  `.Position.position.{x,y,z}`, `.Action.{lmtID,fsm}`,
+  `.Frame.{frame,frameEnd,frameSpeed,frameSpeedMultiplies}`.
+- **Per-part HP / break flags are not exposed anywhere in the bundled
+  modules** — only whole-monster `health_current`/`health_max`. Still an
+  open question for Phase 1's reward shaping (per-monster configs that
+  want part-break rewards): either it's not exposed at all and needs a
+  raw memory offset (cross-reference a community Cheat Engine table), or
+  it's available through a module this project hasn't needed to read yet.
+- `engine.Quest:new()` gives `.Id`, `.State`, `.Time` — `.State` is the
+  natural episode-boundary signal for Phase 1 (quest start/clear/fail),
+  worth checking what values it actually takes once a hunt is run.
+  `engine.World:new()` gives `.MapId`, `.Time`, `.Position.wayPosition`.
+- `io.open` is expected to work (unverified in a live run, but
+  `Lua/Engine.lua` itself uses LuaFileSystem — `lfs.dir`, `lfs.attributes`
+  — and `GetFileMD5`/`dofile` for its own module loading, which all but
+  requires a full, unsandboxed `io`/`os` environment). No evidence of a
+  scriptable websocket API in anything read so far — file-polling IPC
+  stays the plan; not chasing the websocket idea further without a
+  concrete reason to.
 
-- Whether `GetAllMonster()`'s returned monster handles expose HP directly,
-  or whether HP requires an extra raw memory read at some offset from the
-  entity address (the README calls out "basic memory reading and writing
-  functionality" as a separate feature from the data-parsing `engine` API —
-  may need to cross-reference a community Cheat Engine table for the actual
-  HP offset).
-- Whether per-part HP / break flags are exposed at all via the documented
-  API, or need the same raw-memory-offset treatment.
-- Whether `io` is unrestricted in this Lua environment (the script assumes
-  yes — LuaEngine's README mentions built-in file downloading and websocket
-  support, which implies a fairly unsandboxed environment, but this hasn't
-  been confirmed).
-- **If websockets turn out to be scriptable from Lua**, that's a strictly
-  better IPC path than file polling (lower latency, push instead of poll) —
-  worth revisiting `env/game_interface/lua_bridge.py` once the API surface
-  in `src/lua_register.h` (from the LuaEngine source) has actually been
-  read.
+## Remaining open question
 
-Update this file's table and the open-questions list once these are
-resolved — this is meant to be a living doc, not a one-time note.
+- **Runtime behavior is still unverified.** The API shape above is
+  confirmed from source, but `state_reader.lua` hasn't actually been
+  `reload`ed in a running game yet. Do that, then:
+  ```sh
+  python scripts/verify_state_read.py
+  ```
+  should start printing monster/player/quest state read from the file it
+  writes (see the script's header comment for `OUTPUT_PATH`, and note
+  under Proton where a relative-path write actually lands on the Linux
+  filesystem is still unconfirmed — check both the MHW install dir and
+  `$HOME`, per `verify_state_read.py`'s default search).
+
+Update this doc once that's run — this is meant to be a living doc, not a
+one-time note.
 
 ## Input injection note (Steam Input)
 

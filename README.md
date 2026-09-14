@@ -20,9 +20,13 @@ Phase 0 (tooling spike) — in progress.
 - ✅ `grim`-based capture and the `evdev` virtual gamepad both work
   end-to-end on this machine (see `docs/risks.md` for measured numbers —
   capture is currently slow, ~2.4 fps, until cropped to just the game
-  window).
-- ❌ LuaEngine is not installed — blocks state-read verification. See
-  [`docs/modding_setup.md`](docs/modding_setup.md).
+  window — see [`docs/performance_tuning.md`](docs/performance_tuning.md)).
+- ✅ LuaEngine is installed, and `lua_scripts/state_reader.lua` is
+  rewritten against its real API (read from the installed source, not
+  guessed — see [`docs/modding_setup.md`](docs/modding_setup.md)).
+- ⬜ **Not yet run against a live game.** Next step: drop
+  `state_reader.lua` into the game's `Lua/` folder, `reload state_reader`
+  in chat, then run `scripts/verify_state_read.py`.
 - ⬜ Input injection has been verified to construct/close a virtual pad, but
   **not yet verified against the actual running game** — run
   `scripts/verify_input_injection.py` with MHW focused to check.
