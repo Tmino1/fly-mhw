@@ -1,15 +1,20 @@
 # Great Sword action space, v1 — a minimal first pass, not a finished
-# moveset. Deliberately excludes charge levels, tackle, camera control,
-# and triggers/shoulder buttons beyond one guessed sheathe action.
+# moveset. Deliberately excludes charge levels, tackle, and camera control.
 #
 # `verified` tracks whether this action's button/axis mapping has been
-# confirmed against the live game. Only `dodge` is verified so far — it's
-# the same BTN_SOUTH tap confirmed working in Phase 0 (landed as MHW's
-# menu-confirm action). Everything else is a best-guess default Xbox
-# scheme from web research (see docs/risks.md), NOT confirmed on this
-# install. Run scripts/verify_action_mapping.py before trusting any
-# unverified action, and update its `code`/`verified` fields by hand
-# based on what you observe.
+# confirmed against the live game.
+#
+# GOTCHA CONFIRMED LIVE (2026-09-14) — READ BEFORE ADDING A NEW WEAPON:
+# evdev's compass-direction button aliases are NOT what the names suggest.
+# BTN_NORTH is numerically THE SAME CODE as BTN_X (0x133), and BTN_WEST is
+# numerically THE SAME CODE as BTN_Y (0x134) — backwards from the
+# intuitive "North=top=Y, West=left=X" reading. attack_1 originally used
+# BTN_NORTH intending Y and silently did nothing in-game (it was sending
+# X) until this was caught by checking `python3 -c "from evdev import
+# ecodes as e; print(hex(e.BTN_NORTH), hex(e.BTN_Y))"` and fixed to
+# BTN_Y directly. Always use the letter alias (BTN_Y/BTN_X/BTN_A/BTN_B),
+# never the compass alias (BTN_NORTH/BTN_WEST/BTN_SOUTH/BTN_EAST), when
+# writing a new weapon config — the letter aliases mean what they say.
 schema: "fly-mhw/weapon_config/v1"
 name: "Great Sword"
 weapon_type_id: 0  # confirmed empirically against player.weapon_type — see docs/risks.md
@@ -49,27 +54,29 @@ actions:
   - name: attack_1
     axes: {ABS_X: 0, ABS_Y: 0}
     buttons:
-      - {code: BTN_NORTH, op: tap, hold_seconds: 0.05}
-    verified: false
-    notes: "Y — attack 1 (Great Sword overhead slash / charge start), per web-researched default Xbox scheme. Unverified against this install."
+      - {code: BTN_Y, op: tap, hold_seconds: 0.15}
+    verified: true
+    notes: "Y = Overhead Slash, confirmed two ways live: (1) matches the game's own Great Sword combo-reference overlay, (2) actually drew the weapon and executed Charged Slash when held. hold_seconds bumped from an initial 0.05 (too short to register at all) to 0.15, matching dodge's confirmed-working duration."
 
   - name: attack_2
     axes: {ABS_X: 0, ABS_Y: 0}
     buttons:
-      - {code: BTN_EAST, op: tap, hold_seconds: 0.05}
-    verified: false
-    notes: "B — attack 2. Unverified."
+      - {code: BTN_B, op: tap, hold_seconds: 0.15}
+    verified: true
+    notes: "B = Wide Slash, confirmed live — character visibly executed Wide Slash (combo indicator lit up on-screen) with the weapon drawn. BTN_EAST/BTN_B aren't ambiguous (unlike NORTH/WEST) but bumped hold_seconds to 0.15 for consistency."
 
   - name: dodge
     axes: {ABS_X: 0, ABS_Y: 0}
     buttons:
-      - {code: BTN_SOUTH, op: tap, hold_seconds: 0.1}
+      - {code: BTN_A, op: tap, hold_seconds: 0.1}
     verified: true
-    notes: "A/South — confirmed live in Phase 0 as MHW's menu-confirm action. In-hunt dodge behavior specifically hasn't been separately confirmed, only that the button press reaches the game."
+    notes: "A = Evade, confirmed live in two contexts: menu-confirm (Phase 0) and the in-gameplay 'Evade: A' HUD legend shown once the weapon is drawn."
 
-  - name: sheathe_unsheathe
-    axes: {ABS_X: 0, ABS_Y: 0}
-    buttons:
-      - {code: BTN_TL, op: tap, hold_seconds: 0.1}
-    verified: false
-    notes: "Lowest-confidence entry — pure guess. Not load-bearing for the Phase 1 loop; drop this action entirely if verification shows it's wrong and no quick correction is found."
+  # sheathe_unsheathe DROPPED (2026-09-14): guessed BTN_TL (LB) — the
+  # live HUD legend showed LB is actually "Select Item," not sheathe.
+  # A second guess (holding BTN_Y longer) triggered Charged Slash instead
+  # of sheathing. Not load-bearing for Phase 1 (per the original note
+  # here) and two guesses came up empty, so dropped per that plan rather
+  # than continuing to guess. Re-add once the real binding is found —
+  # candidates not yet tried: RB/BTN_TR, a stick click, or a held
+  # combination of the D-pad.

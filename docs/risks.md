@@ -5,11 +5,12 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **Great Sword's action-space button mapping is unverified.** Only
-  `dodge` (`BTN_SOUTH`) is confirmed — `attack_1`/`attack_2`/
-  `sheathe_unsheathe`/movement in `configs/weapons/greatsword.yaml` are a
-  best-guess default Xbox scheme from web research, not confirmed on this
-  install. Run `scripts/verify_action_mapping.py` before trusting them.
+- **Movement direction/strafe signs are still unverified.** `attack_1`,
+  `attack_2`, and `dodge` are now all confirmed live (see Resolved below)
+  — only `move_forward`/`move_backward`/`strafe_left`/`strafe_right`'s
+  sign conventions remain unconfirmed against MHW's camera-relative
+  movement. `sheathe_unsheathe` was dropped entirely (two guesses came up
+  empty; not load-bearing for Phase 1).
 - **`quest.state`'s real enum values are still unobserved.** Only the
   idle value (`0`, no active quest) has ever been seen. Phase 1's episode-
   boundary logic (`env/reward.py`) deliberately doesn't depend on this —
@@ -96,3 +97,16 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 - ~~`weapon_type`/`weapon_id` id→name mapping~~ — resolved 2026-09-14,
   confirmed empirically by swapping weapons in-game and reading
   `player.weapon_type`: `0` = Great Sword, `5` = Hunting Horn.
+- ~~Great Sword attack_1/attack_2/dodge button mapping~~ — resolved
+  2026-09-14, confirmed live against the game's own HUD legends and
+  actual move execution. Found and fixed a real bug along the way:
+  **`BTN_NORTH` and `BTN_WEST` are swapped from their intuitive compass
+  meaning in evdev** — `BTN_NORTH` is numerically the same code as
+  `BTN_X` (`0x133`), and `BTN_WEST` is numerically the same as `BTN_Y`
+  (`0x134`). `attack_1` originally used `BTN_NORTH` intending Y and
+  silently did nothing (it was sending X); fixed to `BTN_Y` directly.
+  Also bumped `hold_seconds` from `0.05` to `0.15` for both attacks — the
+  original 0.05 tap was too short to register at all, independent of the
+  code bug. See `configs/weapons/greatsword.yaml`'s header comment —
+  **always use the letter alias (`BTN_Y`/`BTN_X`/`BTN_A`/`BTN_B`), never
+  the compass alias, in any future weapon config.**

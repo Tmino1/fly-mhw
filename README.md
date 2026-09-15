@@ -32,21 +32,28 @@ the live game:
   0 blocker, but worth doing before Phase 1's environment loop needs
   real throughput.
 
-**Phase 1 (MHWEnv + configs) — built, not yet run live.** `MHWEnv`,
-`action_space.py`, `reward.py`, and the Great Sword / Great Jagras configs
-exist and pass offline tests (config loading, a 7-case reward-logic
-fixture suite, `MHWEnv` construction) — see `docs/architecture.md`'s Phase
-1 decisions table. Two things are real guesses until verified against the
-live game:
+**Phase 1 (MHWEnv + configs) — action mapping verified live, quest loop
+not yet run.** `MHWEnv`, `action_space.py`, `reward.py`, and the Great
+Sword / Great Jagras configs exist and pass offline tests (config
+loading, a 7-case reward-logic fixture suite, `MHWEnv` construction) —
+see `docs/architecture.md`'s Phase 1 decisions table.
 
-- Great Sword's button mapping (`configs/weapons/greatsword.yaml`) — only
-  `dodge` is confirmed; run `scripts/verify_action_mapping.py` first.
-- `quest.state`'s real values are unknown — episode-boundary logic
+- ✅ `attack_1`/`attack_2`/`dodge` confirmed live against the game's own
+  HUD legends and actual move execution. Caught and fixed a real bug
+  along the way: evdev's `BTN_NORTH`/`BTN_WEST` compass aliases are
+  numerically **swapped** from their intuitive meaning (`BTN_NORTH` ==
+  `BTN_X`, `BTN_WEST` == `BTN_Y`) — see `configs/weapons/greatsword.yaml`'s
+  header comment before writing any new weapon config.
+  `sheathe_unsheathe` was attempted twice and dropped (not load-bearing).
+  Movement's sign convention is still unverified — one more pass of
+  `scripts/verify_action_mapping.py --only move_forward,move_backward,strafe_left,strafe_right`
+  will settle it.
+- `quest.state`'s real values are still unknown — episode-boundary logic
   deliberately doesn't depend on them (see `docs/risks.md`), but
   `scripts/run_dummy_policy.py --policy idle` through a real quest will
   reveal them.
 
-Recommended order: `verify_action_mapping.py` → `run_dummy_policy.py
+Recommended order from here: confirm movement signs → `run_dummy_policy.py
 --policy idle` (one full quest) → `run_dummy_policy.py --policy random`
 (the actual crash-resistance acceptance test).
 

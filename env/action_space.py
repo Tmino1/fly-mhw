@@ -19,8 +19,29 @@ from .game_interface.input_injector import VirtualGamepad
 
 WEAPON_CONFIG_SCHEMA = "fly-mhw/weapon_config/v1"
 
+# Confirmed live 2026-09-14 (see configs/weapons/greatsword.yaml and
+# docs/risks.md): evdev's compass-direction button aliases are swapped
+# from their intuitive meaning — BTN_NORTH is numerically BTN_X, and
+# BTN_WEST is numerically BTN_Y. A weapon config almost certainly means
+# the letter when it says "Y" or "X", so warn loudly if a compass alias
+# shows up — it's very likely a bug, the same one attack_1 originally had.
+_COMPASS_ALIAS_WARNING = {
+    "BTN_NORTH": "BTN_X",
+    "BTN_WEST": "BTN_Y",
+    "BTN_SOUTH": "BTN_A",  # not actually swapped, but flagged too since it's
+    "BTN_EAST": "BTN_B",   # the same family of alias and easy to typo-confuse
+}
+
 
 def _resolve_code(name: str) -> int:
+    if name in _COMPASS_ALIAS_WARNING:
+        print(
+            f"[action_space] WARNING: {name!r} is a compass alias, numeric "
+            f"value {hex(getattr(ecodes, name))} == {_COMPASS_ALIAS_WARNING[name]!r}. "
+            f"If you meant the letter button, use {_COMPASS_ALIAS_WARNING[name]!r} "
+            "directly instead — BTN_NORTH/BTN_WEST in particular are NOT what "
+            "their compass name suggests. See docs/risks.md."
+        )
     try:
         return getattr(ecodes, name)
     except AttributeError as exc:
