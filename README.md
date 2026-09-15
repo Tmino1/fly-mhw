@@ -38,24 +38,26 @@ Sword / Great Jagras configs exist and pass offline tests (config
 loading, a 7-case reward-logic fixture suite, `MHWEnv` construction) —
 see `docs/architecture.md`'s Phase 1 decisions table.
 
-- ✅ `attack_1`/`attack_2`/`dodge` confirmed live against the game's own
-  HUD legends and actual move execution. Caught and fixed a real bug
-  along the way: evdev's `BTN_NORTH`/`BTN_WEST` compass aliases are
-  numerically **swapped** from their intuitive meaning (`BTN_NORTH` ==
-  `BTN_X`, `BTN_WEST` == `BTN_Y`) — see `configs/weapons/greatsword.yaml`'s
-  header comment before writing any new weapon config.
+- ✅ **All 8 actions verified live.** Attacks/dodge confirmed against the
+  game's own HUD legends and actual move execution; movement confirmed by
+  measuring position deltas (forward/backward and left/right both exactly
+  antiparallel, forward ⊥ left) plus a visual landmark check.
+- ✅ Two real bugs caught by verifying instead of trusting guesses:
+  evdev's `BTN_NORTH`/`BTN_WEST` compass aliases are numerically
+  **swapped** from their intuitive meaning (`BTN_NORTH` == `BTN_X`,
+  `BTN_WEST` == `BTN_Y`) — read `configs/weapons/greatsword.yaml`'s header
+  before writing any new weapon config; and `monsters[0]` target selection
+  was disproved by a live dump showing 11 simultaneous monster entities.
   `sheathe_unsheathe` was attempted twice and dropped (not load-bearing).
-  Movement's sign convention is still unverified — one more pass of
-  `scripts/verify_action_mapping.py --only move_forward,move_backward,strafe_left,strafe_right`
-  will settle it.
-- `quest.state`'s real values are still unknown — episode-boundary logic
+- ⬜ `quest.state`'s real values are still unknown — episode-boundary logic
   deliberately doesn't depend on them (see `docs/risks.md`), but
   `scripts/run_dummy_policy.py --policy idle` through a real quest will
-  reveal them.
+  reveal them, along with Great Jagras's real monster id (needed to pin
+  target selection exactly).
 
-Recommended order from here: confirm movement signs → `run_dummy_policy.py
---policy idle` (one full quest) → `run_dummy_policy.py --policy random`
-(the actual crash-resistance acceptance test).
+Recommended order from here: `run_dummy_policy.py --policy idle` (one full
+quest) → `run_dummy_policy.py --policy random` (the crash-resistance
+acceptance test). Offline regression suite: `python tests/test_reward.py`.
 
 ## This machine's environment (recorded 2026-09-14)
 

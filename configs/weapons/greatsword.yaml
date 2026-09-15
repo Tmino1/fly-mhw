@@ -30,26 +30,38 @@ actions:
     verified: true
     notes: "No-op baseline; sticks recentered to neutral."
 
+  # All four movement actions verified live 2026-09-14 by measuring
+  # player-position deltas from state_reader.lua over a 2s hold each,
+  # cross-checked visually against a fixed landmark (a training-area
+  # pole). Results: forward vs backward cos=-1.00 (exactly opposite),
+  # left vs right cos=-1.00, forward vs left cos=-0.01 (orthogonal) —
+  # a clean basis. Direction confirmed visually: forward grew the pole
+  # (moved toward it / away from camera), strafe_left shifted the world
+  # right on screen. Movement is camera-relative in MHW, so these are
+  # correct regardless of world-coordinate orientation.
   - name: move_forward
     axes: {ABS_X: 0, ABS_Y: -32767}
     buttons: []
-    verified: false
-    notes: "Left-stick forward, standard-gamepad sign convention assumed. Unverified against MHW's camera-relative movement."
+    verified: true
+    notes: "Left stick up = forward (away from camera). Measured +471 units over a 2s hold."
 
   - name: move_backward
     axes: {ABS_X: 0, ABS_Y: 32767}
     buttons: []
-    verified: false
+    verified: true
+    notes: "Measured -426 units over 2s, exactly antiparallel to move_forward."
 
   - name: strafe_left
     axes: {ABS_X: -32767, ABS_Y: 0}
     buttons: []
-    verified: false
+    verified: true
+    notes: "Measured 446 units, orthogonal to forward. World visibly shifted right on screen, confirming leftward movement."
 
   - name: strafe_right
     axes: {ABS_X: 32767, ABS_Y: 0}
     buttons: []
-    verified: false
+    verified: true
+    notes: "Measured 427 units, exactly antiparallel to strafe_left."
 
   - name: attack_1
     axes: {ABS_X: 0, ABS_Y: 0}

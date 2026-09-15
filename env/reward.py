@@ -33,6 +33,10 @@ class StepOutcome:
     monster_hp_fraction: Optional[float]
     player_hp_fraction: Optional[float]
     quest_state_raw: Any  # passthrough for logging only, never branched on
+    monster_id: Any = None  # which monster select_monster() picked, for logging —
+                            # this is how the target's real id gets learned so it
+                            # can be pinned in the config's expected_ids
+    monster_count: int = 0  # how many entities were live this step
 
 
 def _hp_fraction(entity: Optional[dict]) -> Optional[float]:
@@ -67,22 +71,61 @@ class RewardModel:
         # just relying on the YAML key existing) so older configs don't break.
         self.near_zero_hp_threshold = terminal.get("near_zero_hp_threshold", 0.01)
         self.max_episode_steps = config["episode_boundaries"]["max_episode_steps"]
+        ident = config["identification"]
+        # Optional allowlist of monster ids. Once the target's real id is
+        # known (read it out of run_dummy_policy.py's logs), setting this
+        # makes selection exact instead of heuristic.
+        self.expected_ids = ident.get("expected_ids") or []
+        self.min_health_max = ident.get("min_health_max", 0)
 
     @classmethod
     def from_config(cls, path: str | Path) -> "RewardModel":
         return cls(load_config(path, MONSTER_CONFIG_SCHEMA))
 
     def select_monster(self, state: Optional[GameState]) -> Optional[dict]:
+        """Pick the hunt target out of the live monster list.
+
+        GetAllMonster() returns EVERY live monster entity, not just the
+        quest target — confirmed live 2026-09-14, where a training area
+        reported 11 simultaneous entities (max HP 100 and 300). A real
+        hunt's map likewise has small monsters wandering it, so
+        'monsters[0]' would very often track the wrong creature and make
+        the whole reward signal meaningless.
+        """
         if state is None:
             return None
         monsters = state.raw.get("monsters")
-        if self.identification_strategy != "first_monster":
-            raise NotImplementedError(
-                f"unknown identification.strategy {self.identification_strategy!r}"
-            )
         if not isinstance(monsters, list) or not monsters:
             return None
-        return monsters[0]
+
+        candidates = [m for m in monsters if isinstance(m, dict) and "error" not in m]
+
+        # Exact id match wins outright when an allowlist is configured.
+        if self.expected_ids:
+            by_id = [m for m in candidates if m.get("id") in self.expected_ids]
+            if by_id:
+                candidates = by_id
+
+        if self.min_health_max:
+            filtered = [m for m in candidates if (m.get("health_max") or 0) >= self.min_health_max]
+            # Don't let an over-aggressive threshold empty the list entirely;
+            # fall back to the unfiltered set rather than silently reporting
+            # "no monster" (which reads as 'quest ended' downstream).
+            candidates = filtered or candidates
+
+        if not candidates:
+            return None
+
+        if self.identification_strategy == "highest_max_health":
+            # A large/quest monster has far more max HP than the small fry
+            # sharing its map (thousands vs. the 100-300 measured live), so
+            # this cleanly separates them without hardcoding any id.
+            return max(candidates, key=lambda m: m.get("health_max") or 0)
+        if self.identification_strategy == "first_monster":
+            return candidates[0]
+        raise NotImplementedError(
+            f"unknown identification.strategy {self.identification_strategy!r}"
+        )
 
     def step(
         self,
@@ -152,6 +195,7 @@ class RewardModel:
         quest_curr = curr_state.raw.get("quest")
         quest_state_raw = quest_curr.get("state") if isinstance(quest_curr, dict) else None
 
+        curr_monsters = curr_state.raw.get("monsters")
         return StepOutcome(
             reward=reward,
             terminated=terminated,
@@ -160,4 +204,6 @@ class RewardModel:
             monster_hp_fraction=monster_curr_frac,
             player_hp_fraction=player_curr_frac,
             quest_state_raw=quest_state_raw,
+            monster_id=monster_curr.get("id") if isinstance(monster_curr, dict) else None,
+            monster_count=len(curr_monsters) if isinstance(curr_monsters, list) else 0,
         )

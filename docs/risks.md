@@ -5,12 +5,13 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **Movement direction/strafe signs are still unverified.** `attack_1`,
-  `attack_2`, and `dodge` are now all confirmed live (see Resolved below)
-  — only `move_forward`/`move_backward`/`strafe_left`/`strafe_right`'s
-  sign conventions remain unconfirmed against MHW's camera-relative
-  movement. `sheathe_unsheathe` was dropped entirely (two guesses came up
-  empty; not load-bearing for Phase 1).
+- **Target selection is heuristic, not exact.** `GetAllMonster()` returns
+  every live monster entity, so `configs/monsters/great_jagras.yaml` uses
+  `highest_max_health` + a `min_health_max: 1000` floor to separate the
+  quest target from small fry. This would pick the wrong creature if a
+  second large monster invades the hunt. The exact fix is filling in
+  `identification.expected_ids` once Great Jagras's real id is read out of
+  `scripts/run_dummy_policy.py`'s logs (it prints the ids it selected).
 - **`quest.state`'s real enum values are still unobserved.** Only the
   idle value (`0`, no active quest) has ever been seen. Phase 1's episode-
   boundary logic (`env/reward.py`) deliberately doesn't depend on this —
@@ -110,3 +111,18 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   code bug. See `configs/weapons/greatsword.yaml`'s header comment —
   **always use the letter alias (`BTN_Y`/`BTN_X`/`BTN_A`/`BTN_B`), never
   the compass alias, in any future weapon config.**
+- ~~Movement direction/strafe sign conventions~~ — resolved 2026-09-14 by
+  measuring player-position deltas over a 2s hold per action and
+  cross-checking visually against a fixed landmark. forward vs backward
+  cos=-1.00, left vs right cos=-1.00, forward vs left cos=-0.01 — a clean
+  orthogonal basis, and direction confirmed visually (forward approached
+  the landmark; strafe_left shifted the world right on screen). All four
+  now `verified: true`.
+- ~~`first_monster` target selection~~ — **disproved** 2026-09-14 and
+  replaced. A live state dump showed **11 simultaneous monster entities**
+  (max HP 100 and 300) while `quest.id` was still `-1`, proving
+  `GetAllMonster()` returns every live monster, not just a quest target.
+  `monsters[0]` would have silently tracked a random small monster and
+  made the entire reward signal meaningless. Now `highest_max_health`
+  with a `min_health_max` floor — see the corresponding Open item about
+  pinning `expected_ids` for an exact fix.

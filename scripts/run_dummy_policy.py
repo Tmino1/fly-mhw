@@ -86,6 +86,7 @@ def main():
 
     quest_states_seen = set()
     quest_states_seen.add(info["reward_debug"]["quest_state_raw"])
+    monster_ids_seen = set()
     total_reward = 0.0
     termination_reason = ""
     step_count = 0
@@ -98,10 +99,12 @@ def main():
             quest_states_seen.add(info["reward_debug"]["quest_state_raw"])
 
             line = {"step": step_count, "reward": reward, "terminated": terminated, "truncated": truncated, **info}
-            print(f"[{step_count:4d}] action={info['action_name']:<20s} reward={reward:+.4f} "
-                  f"monster_hp={info['reward_debug']['monster_hp_fraction']} "
-                  f"player_hp={info['reward_debug']['player_hp_fraction']} "
-                  f"quest_state={info['reward_debug']['quest_state_raw']}")
+            rd = info["reward_debug"]
+            print(f"[{step_count:4d}] action={info['action_name']:<16s} reward={reward:+.4f} "
+                  f"monster_hp={rd['monster_hp_fraction']} player_hp={rd['player_hp_fraction']} "
+                  f"quest_state={rd['quest_state_raw']} "
+                  f"target_id={rd['monster_id']} (of {rd['monster_count']} live)")
+            monster_ids_seen.add(rd["monster_id"])
             if log_file:
                 log_file.write(json.dumps(line) + "\n")
 
@@ -120,6 +123,9 @@ def main():
     print(f"total reward:       {total_reward:.4f}")
     print(f"termination reason: {termination_reason or '(max-steps arg reached without terminated/truncated)'}")
     print(f"distinct quest_state_raw values observed: {sorted(quest_states_seen, key=str)}")
+    print(f"monster ids selected as target:           {sorted(monster_ids_seen, key=str)}")
+    print("  -> if that's a single stable id, put it in the monster config's")
+    print("     identification.expected_ids to pin target selection exactly.")
     if args.log_path:
         print(f"full log written to: {args.log_path}")
 

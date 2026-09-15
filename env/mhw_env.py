@@ -139,6 +139,7 @@ class MHWEnv:
             monster_hp_fraction=outcome.monster_hp_fraction, player_hp_fraction=outcome.player_hp_fraction,
             action_name=action_def.name, action_verified=action_def.verified,
             termination_reason=outcome.reason,
+            monster_id=outcome.monster_id, monster_count=outcome.monster_count,
         )
         return capture.image, outcome.reward, outcome.terminated, outcome.truncated, info
 
@@ -153,6 +154,8 @@ class MHWEnv:
         action_name: str,
         action_verified: bool,
         termination_reason: str,
+        monster_id: Any = None,
+        monster_count: int = 0,
     ) -> dict[str, Any]:
         return {
             "capture_latency_seconds": capture.latency_seconds if capture else None,
@@ -175,6 +178,11 @@ class MHWEnv:
                 "quest_state_raw": quest_state_raw,
                 "monster_hp_fraction": monster_hp_fraction,
                 "player_hp_fraction": player_hp_fraction,
+                # Which entity the reward is actually tracking, out of how
+                # many live ones. Read monster_id out of a real hunt's logs
+                # to pin the target in the monster config's expected_ids.
+                "monster_id": monster_id,
+                "monster_count": monster_count,
             },
         }
 
