@@ -1,5 +1,7 @@
 # fly-mhw
 
+# Very early stage prototype
+
 Teaching a fruit-fly brain connectome to hunt in Monster Hunter World.
 
 The "brain" is a recurrent network instantiated from the real synaptic wiring
