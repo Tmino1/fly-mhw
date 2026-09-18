@@ -60,3 +60,33 @@ this repo self-contained (plus one new principle Phase 1 added):
 - A proper win/fail/abandon distinction for episode endings, once
   `quest.state`'s real values are observed from a live run (see
   `configs/monsters/great_jagras.yaml`'s `episode_boundaries.notes`).
+- **Imitation-learning dataset size for Great Sword vs. Great Jagras**
+  (Phase 3). No fixed target — reasoning from chat, 2026-09-18: the action
+  space is small and discrete (8 actions) and the connectome brain's
+  trainable surface is modest by design (per-edge/per-neuron scalars, not
+  a free-form weight matrix), both of which argue for less data than
+  typical game-IL work; pixel-only observation (Design Principle 4 — no
+  structured state leaks into the input) argues for more, since the
+  visual encoder needs real camera-angle/position coverage. Rough
+  estimate: "full" (held-out accuracy plateaus) likely lands around
+  60–120 hunts (~150k–400k frame/action transitions), but the actual
+  target should be found empirically — record in batches (~15-30 hunt
+  starter, then +15 increments), track held-out action-prediction
+  accuracy per batch, stop when it plateaus. Diversity across monster
+  states (enraged vs. not, recoveries from mistakes, not just clean runs)
+  matters more than raw hunt count.
+- **IL→RL transition mechanics** (Phase 4). The roadmap already calls for
+  behavior-cloning bootstrap then online RL fine-tuning — two things
+  still need deciding once Phase 3 produces a checkpoint to fine-tune:
+  (1) **algorithm choice** — a replay-buffer-based/off-policy method
+  (DQN-family, given the small discrete action space, or an off-policy
+  actor-critic) likely beats a fully on-policy method like PPO here,
+  since with only one real-time game instance every expensive live
+  transition should be reusable across multiple gradient updates rather
+  than spent on a single rollout; (2) **guarding against policy
+  collapse** — naive RL fine-tuning of a decent IL policy risks a few bad
+  early updates wrecking it before RL improves anything. Standard
+  mitigation: keep a BC-regularization term (KL penalty toward the IL
+  policy, or a blended BC+RL loss) early in fine-tuning rather than
+  switching to pure RL loss immediately — the offline-to-online RL
+  literature (AWAC, IQL, similar) uses this pattern for the same reason.
