@@ -24,20 +24,23 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
   rewards will need either a raw memory offset (cross-reference a
   community Cheat Engine table) or a module this project hasn't read yet.
-- **`grim`-based capture is too slow as-is.** Measured 2026-09-14:
-  ~2.4 fps sustained (10-frame average), and a 116-second outlier on the
-  very first call in-process (possibly a one-time portal/compositor
-  warm-up — not yet explained, worth re-checking). At 5360×1440 it's also
-  capturing the *entire* multi-monitor layout, not just the MHW window —
-  `capture_frame(geometry=...)` supports restricting to a region but this
-  hasn't been tried yet. Cheapest immediate fix: MHW's own config confirms
-  it renders to a single display (`Display2`/2560×1440, not the full
-  virtual desktop) — cropping capture to just that output should recover
-  most of the throughput before anything else is tried. Full writeup,
-  plus in-game settings and a `gamescope` option for further gains, in
-  `docs/performance_tuning.md`. If cropping alone isn't enough, the
-  PipeWire-screencast-portal path mentioned in `docs/architecture.md` is
-  the fallback.
+- **`grim`-based capture was too slow uncropped** (~2.4 fps sustained,
+  measured 2026-09-14, capturing the entire 5360×1440 multi-monitor
+  desktop). Cropping is now implemented —
+  `env/game_interface/capture.find_window_geometry()` queries `hyprctl
+  clients -j` for MHW's window and returns a `grim -g`-compatible
+  geometry string, tested working against the mechanism itself (matched
+  known-open windows correctly) — **but written with MHW not running, so
+  its `_MHW_CLASS_PATTERNS`/`_MHW_TITLE_PATTERNS` guesses (the Steam app
+  id, the literal name) are unverified against what Proton actually
+  reports, and the post-crop fps hasn't been measured yet.** Next time
+  the game is up: run `scripts/list_windows.py` to confirm/fix the
+  patterns if `find_window_geometry()` returns `None`, then re-run
+  `measure_capture_rate(geometry=...)` and record the real number here.
+  Full writeup, plus in-game settings and a `gamescope` option for
+  further gains, in `docs/performance_tuning.md`. If cropping alone isn't
+  enough, the PipeWire-screencast-portal path mentioned in
+  `docs/architecture.md` is the fallback.
 - **Licensing.** Connectome dataset, flyvis, and haltere licenses all need
   individual verification before any code is vendored or a derived model is
   used/shared. Not yet checked — do this before Phase 2 goes deep.

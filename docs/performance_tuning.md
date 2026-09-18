@@ -26,14 +26,32 @@ Useful fact hiding in there: **MHW already renders to one 2560×1440
 display (`Display2`), not the full virtual desktop.** `grim`'s slow
 measurement was capturing far more than the game actually occupies.
 
-## Free win: capture only the game's output
+## Free win: capture only the game's window
 
-Before touching a single graphics setting — `grim -o <output-name>`
-captures a single named output instead of everything. Find MHW's actual
-Wayland output name (`hyprctl monitors` lists them) and pass it to
-`env/game_interface/capture.capture_frame(geometry=...)`, or use `grim -o`
-directly. Cuts captured pixel area roughly in half immediately, no
-in-game changes needed.
+**Implemented** (2026-09-18): `env/game_interface/capture.find_window_geometry()`
+queries `hyprctl clients -j` for MHW's window and returns a `grim -g`-compatible
+`"X,Y WxH"` string — tighter than cropping to the whole output, since it
+follows the actual window rather than assuming borderless-fullscreen
+always fills the display exactly. Usage:
+
+```python
+from env.game_interface.capture import find_window_geometry, measure_capture_rate
+
+geometry = find_window_geometry()  # call once, reuse — shells out to hyprctl
+if geometry is None:
+    print("MHW window not found — is it running? Try scripts/list_windows.py")
+else:
+    print(measure_capture_rate(geometry=geometry))
+```
+
+**Status: code is tested, the MHW-specific match is not.** Written while
+MHW wasn't running, so `find_window_geometry`'s default class/title
+patterns are best guesses — confirmed working correctly against other
+windows (`hyprctl`-parsing and matching logic is solid) but never against
+MHW itself. Next session with the game open: run `python
+scripts/list_windows.py` to see its real `class`/`title`, fix the
+patterns in `capture.py` if they didn't match, and record the real
+before/after fps here (baseline was ~2.4 fps uncropped).
 
 ## In-game settings, ranked by FPS impact when lowered
 
