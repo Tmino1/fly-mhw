@@ -44,14 +44,23 @@ else:
     print(measure_capture_rate(geometry=geometry))
 ```
 
-**Status: code is tested, the MHW-specific match is not.** Written while
-MHW wasn't running, so `find_window_geometry`'s default class/title
-patterns are best guesses — confirmed working correctly against other
-windows (`hyprctl`-parsing and matching logic is solid) but never against
-MHW itself. Next session with the game open: run `python
-scripts/list_windows.py` to see its real `class`/`title`, fix the
-patterns in `capture.py` if they didn't match, and record the real
-before/after fps here (baseline was ~2.4 fps uncropped).
+**Status: confirmed live, 2026-09-18.** `steam_app_582010` (the first
+guessed pattern) matched MHW's real Hyprland window class exactly —
+`scripts/list_windows.py` showed `class='steam_app_582010'
+title='MONSTER HUNTER: WORLD(421810)'`. Measured with the game actually
+running (window was `0,0 1920x1080` at the time):
+
+| | fps |
+|---|---|
+| Uncropped (full desktop) | 0.97 |
+| Cropped (`find_window_geometry()`) | **5.00** |
+
+~5x improvement. Note this uncropped number is *with the game running*
+and thus under real GPU load — it's not directly comparable to the
+original ~2.4 fps Phase 0 baseline, which was measured desktop-idle with
+the game closed (see `docs/risks.md`'s Resolved section for the full
+note). 5 fps is a real improvement but still a coarse control rate — see
+`docs/risks.md`'s Open section for the follow-up if Phase 4 needs faster.
 
 ## In-game settings, ranked by FPS impact when lowered
 

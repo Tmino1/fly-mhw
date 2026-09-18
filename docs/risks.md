@@ -24,23 +24,14 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
   rewards will need either a raw memory offset (cross-reference a
   community Cheat Engine table) or a module this project hasn't read yet.
-- **`grim`-based capture was too slow uncropped** (~2.4 fps sustained,
-  measured 2026-09-14, capturing the entire 5360×1440 multi-monitor
-  desktop). Cropping is now implemented —
-  `env/game_interface/capture.find_window_geometry()` queries `hyprctl
-  clients -j` for MHW's window and returns a `grim -g`-compatible
-  geometry string, tested working against the mechanism itself (matched
-  known-open windows correctly) — **but written with MHW not running, so
-  its `_MHW_CLASS_PATTERNS`/`_MHW_TITLE_PATTERNS` guesses (the Steam app
-  id, the literal name) are unverified against what Proton actually
-  reports, and the post-crop fps hasn't been measured yet.** Next time
-  the game is up: run `scripts/list_windows.py` to confirm/fix the
-  patterns if `find_window_geometry()` returns `None`, then re-run
-  `measure_capture_rate(geometry=...)` and record the real number here.
-  Full writeup, plus in-game settings and a `gamescope` option for
-  further gains, in `docs/performance_tuning.md`. If cropping alone isn't
-  enough, the PipeWire-screencast-portal path mentioned in
-  `docs/architecture.md` is the fallback.
+- **5 fps cropped may still not be enough for Phase 4's real-time control
+  loop.** Cropping fixed the "capturing far more than needed" problem
+  (see Resolved below), but 5 fps is still a coarse control rate for
+  live combat — worth revisiting with `gamescope`'s fixed-window
+  approach or a PipeWire-screencast-portal capture (both mentioned in
+  `docs/performance_tuning.md`/`docs/architecture.md`) if it proves
+  limiting once Phase 4 actually needs to react to fast monster tells in
+  real time. Not a blocker for Phase 1-3 work.
 - **Licensing.** Connectome dataset, flyvis, and haltere licenses all need
   individual verification before any code is vendored or a derived model is
   used/shared. Not yet checked — do this before Phase 2 goes deep.
@@ -57,6 +48,17 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`grim`-based capture captured the whole desktop instead of just
+  MHW~~ — resolved 2026-09-18, confirmed live with the game running:
+  `find_window_geometry()`'s guessed pattern (`steam_app_582010`) matched
+  MHW's real Hyprland window class exactly on the first try — window was
+  at `0,0 1920x1080` at measurement time (differs from the
+  `2560x1440`/`Display2` seen in `graphics_option.ini` earlier — display
+  config had changed since; `find_window_geometry()` reads it live each
+  call rather than assuming, so this doesn't matter). Measured **with the
+  game actually running** (a more honest comparison than the original
+  Phase 0 baseline, which was measured desktop-idle with the game
+  closed): **0.97 fps uncropped → 5.00 fps cropped, a ~5x improvement.**
 - ~~Screen-capture backend choice~~ — resolved 2026-09-14: `grim`, this
   machine is Hyprland/Wayland (see `docs/architecture.md`).
 - ~~`/dev/uinput` permissions~~ — resolved 2026-09-14: already has an ACL
