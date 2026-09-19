@@ -73,6 +73,21 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~Memory-write skip wrote to the wrong address~~ — resolved 2026-09-19.
+  The flag file (confirmed created — the episode's own JSONL logged
+  `quest_state_raw` passing through `3` right on schedule) and the Lua
+  logic both ran, but the countdown still didn't skip. Root cause: copied
+  `Engine_quest.lua`'s AOB pattern/fallback address for the `sQuest`
+  singleton but missed that `pointer:quest()` does ONE MORE dereference
+  on top of it (`GetAddressData(aob_quest, 'int')` — the AOB/fallback
+  resolves to the address of a *pointer slot*, not the singleton
+  instance itself). Writing `Time = MaxTime` at `(wrong base) + 0x13198 +
+  0x08` silently hit unrelated memory instead of the real
+  `QuestEndTimer`. Fixed by adding that same dereference
+  (`quest_singleton_for_skip()` now calls
+  `GetAddressData(quest_slot_for_skip(), "int")` fresh each time, caching
+  only the slot address — matching `Engine_quest.lua` exactly: the slot
+  is stable, but the singleton instance stored there can change).
 - ~~`BTN_SOUTH` never actually skipped the post-hunt screen, even once
   correctly timed~~ — resolved 2026-09-19. After the timing fix below,
   still confirmed live that a manual, isolated `BTN_SOUTH` tap did

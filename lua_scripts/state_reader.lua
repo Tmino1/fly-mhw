@@ -183,17 +183,32 @@ end
 -- outside an active recording session (explicit requirement: normal
 -- untracked play should see the timer behave completely normally).
 local aob_quest_for_skip = nil
-local function quest_singleton_for_skip()
+local function quest_slot_for_skip()
   if not aob_quest_for_skip then
     -- Same AOB pattern + fallback address Lua/modules/Engine_quest.lua
     -- itself uses — copied here rather than reaching into that module's
-    -- private pointer, since it doesn't expose one.
+    -- private pointer, since it doesn't expose one. This resolves to the
+    -- ADDRESS OF A POINTER SLOT, not the singleton itself — see
+    -- quest_singleton_for_skip() below. Bug found live 2026-09-19: an
+    -- earlier version of this file returned this raw slot address
+    -- directly as if it were the singleton, silently writing to the
+    -- wrong memory location (Engine_quest.lua's own pointer:quest()
+    -- always does one more GetAddressData(aob_quest, 'int') dereference
+    -- on top of this — missed that the first time around).
     aob_quest_for_skip = SearchPattern({ 0x10, 0x22, "??", 0x0F, 0x00, 0x00 })
     if not aob_quest_for_skip then
       aob_quest_for_skip = 0x14500ED30
     end
   end
   return aob_quest_for_skip
+end
+
+-- The actual sQuest singleton address — dereferenced fresh every call
+-- (not cached), matching Engine_quest.lua's own pointer:quest()
+-- exactly: only the SLOT address is stable/cacheable, the singleton
+-- instance stored there can change (e.g. across reloads).
+local function quest_singleton_for_skip()
+  return GetAddressData(quest_slot_for_skip(), "int")
 end
 
 local skipped_this_wait = false
