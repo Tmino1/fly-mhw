@@ -204,6 +204,69 @@ segmenter, label audit) carries over untouched.
   inference — but if it's wrong, the likely failure mode is a game crash,
   not a quiet no-op. Whoever picks this up should test on a throwaway
   session, not mid-recording.
+- **IL -> RL fine-tuning technique (Phase 4): Q2RL.** Raised 2026-09-19,
+  still the plan as of 2026-09-25 even after dropping `ConnectomeBrain`.
+  [Q2RL](https://q2rl.rai-inst.com/) (Dodeja et al., RSS 2026; RAI
+  Institute/Brown/Northeastern; MIT-licensed code at
+  github.com/rai-opensource/q2rl) extracts a Q-function for free from a
+  trained BC policy's action log-probs/entropy (no extra training —
+  assumes the BC policy approximates a Boltzmann distribution), then
+  during RL fine-tuning gates between that frozen BC-derived Q and a
+  trainable RL Q, taking whichever is higher at each step — directly
+  targets "RL fine-tuning wrecks the imitation-learned policy," exactly
+  the failure mode this project's own IL->RL transition will need to
+  avoid. The math still fits: whatever replaces `ConnectomeBrain`'s
+  `motor_readout` for the tool-based action space is still expected to
+  output a softmax over discrete actions, which *is* a Boltzmann
+  distribution — arguably a more direct fit than the continuous
+  Gaussian-mixture robot policies Q2RL was built around.
+
+  **Don't adopt the repo/dependencies** — it's JAX (this project is
+  PyTorch) with a deep robotics-specific dependency chain (MuJoCo, D4RL,
+  Adroit envs, robomimic, wandb, Docker/CUDA) built for continuous-control
+  manipulation benchmarks, none of which apply here. The reusable part is
+  the algorithmic idea (Q-estimation + Q-gating), not the codebase — an
+  early offline-only prototype (`brain/q_network.py`,
+  `training/q_estimation.py`, built against `ConnectomeBrain`'s softmax
+  output) exists on a local branch and needs porting to whatever policy
+  head the tool-based action space ends up with. Premature to finish now:
+  Phase 4 (RL fine-tuning) hasn't started, and Phase 3's IL itself needs
+  rebuilding for the new action space first. Revisit when Phase 4
+  actually starts.
+- **Great Jagras arena quest — side project, not part of the ML pipeline,
+  raised 2026-09-19.** Motivation: recording sessions currently chase
+  Great Jagras around the open world; a fixed-arena quest removes that.
+  Extracting a real quest file from the game's own chunk archive was a
+  dead end — needs Oodle's proprietary `oo2core_8_win64.dll`, which isn't
+  bundled with MHW and wasn't available anywhere on this machine or its
+  Steam library. Worked around it: the user downloaded an existing Nexus
+  quest mod ("Arch Tempered Great Jagras V2"), which ships a real,
+  already-valid `.mib` — no chunk extraction needed at all.
+  `scripts/patch_arena_quest.py` decrypts it (Blowfish ECB + a per-4-byte
+  bswap wrapper, fixed key — format reverse-engineered directly from
+  Aradi147/MHW-Quest's open-source Quest Editor, confirmed byte-for-byte
+  correct: the decrypted quest_id read back as exactly 90001, matching
+  the source file's own name, before any patching), rewrites quest ID
+  (90099), map (`Arena (Challenge)`, id 202 — chosen over Special Arena
+  for a quicker run-up to the monster, per the user), stars/rank (lowered
+  from the source's Master Rank/16-star Arch Tempered tier to 1-star/Low
+  Rank), and clears the Tempered flag on every monster slot (the source
+  quest's Great Jagras was Arch Tempered) — then re-encrypts, with a
+  decrypt-the-output round-trip assertion before ever writing the file.
+  Deployed to `nativePC/quest/questData_90099.mib` +
+  `nativePC/quest/rem/remData_90099.rem` (reward table, copied
+  byte-for-byte from the source quest under the new ID — its format
+  wasn't reverse-engineered, but it doesn't look encrypted and appears to
+  associate to a quest by filename, not an embedded ID) +
+  `nativePC/common/text/quest/q90099_<lang>.gmd` (name/description, same
+  copy-and-rename treatment — still displays the source quest's original
+  "Arch Tempered Great Jagras" text in-game, not patched). **Untested
+  live**: genuinely unknown whether a loose `.mib` under a fresh ID
+  actually surfaces in the in-game quest board without some additional
+  loader mechanism — the 90000+ ID range is a widely-used community
+  convention (this same source archive's own files reference IDs 90001
+  and 90002), which is reasonable evidence it should just work, but
+  hasn't been confirmed against this specific quest yet.
 - **Imitation-learning dataset size for Great Sword vs. Great Jagras**
   (Phase 3). No fixed target — reasoning from chat, 2026-09-18 (written
   for the old 8-action space; the tool-based space is ~230 flat calls,

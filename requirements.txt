@@ -8,3 +8,4 @@
 evdev-binary>=1.7  # virtual gamepad via /dev/uinput (env/game_interface/input_injector.py)
 Pillow>=10.0       # decode PNG frames from grim (env/game_interface/capture.py)
 PyYAML>=6.0        # configs/*.yaml (env/config_loader.py)
+pycryptodome>=3.20 # scripts/patch_arena_quest.py's Blowfish decrypt/re-encrypt of .mib quest files

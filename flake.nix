@@ -21,6 +21,7 @@
                  # a plain venv on this machine (see docs/risks.md).
           pillow # decode PNG frames from grim
           pyyaml # configs/*.yaml (env/config_loader.py)
+          pycryptodome # scripts/patch_arena_quest.py's Blowfish decrypt/re-encrypt
         ]);
 
         # `nix run .#<name> -- <args>` for every script in scripts/, instead
@@ -96,6 +97,16 @@
           relabel-demos = mkScriptApp "scripts/relabel_demos.py";
           # re-labels recorded v2 episodes from their raw events after a
           # graph/timing/bindings change.
+
+          patch-arena-quest = mkScriptApp "scripts/patch_arena_quest.py";
+          # Side project, not part of the ML pipeline — see that script's
+          # own module docstring and docs/architecture.md's "Starting a
+          # quest programmatically" entry. Requires --source/--output/
+          # --quest-id, e.g.:
+          #   nix run .#patch-arena-quest -- \
+          #     --source /path/to/some/mod's/questData_XXXXX.mib \
+          #     --output /path/to/questData_90099.mib \
+          #     --quest-id 90099
         };
       });
 }
