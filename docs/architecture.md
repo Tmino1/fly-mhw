@@ -234,39 +234,93 @@ segmenter, label audit) carries over untouched.
   rebuilding for the new action space first. Revisit when Phase 4
   actually starts.
 - **Great Jagras arena quest — side project, not part of the ML pipeline,
-  raised 2026-09-19.** Motivation: recording sessions currently chase
-  Great Jagras around the open world; a fixed-arena quest removes that.
+  raised 2026-09-19, confirmed working live.** Motivation: recording
+  sessions currently chase Great Jagras around the open world; a
+  fixed-arena quest removes that.
+
   Extracting a real quest file from the game's own chunk archive was a
-  dead end — needs Oodle's proprietary `oo2core_8_win64.dll`, which isn't
-  bundled with MHW and wasn't available anywhere on this machine or its
-  Steam library. Worked around it: the user downloaded an existing Nexus
-  quest mod ("Arch Tempered Great Jagras V2"), which ships a real,
-  already-valid `.mib` — no chunk extraction needed at all.
-  `scripts/patch_arena_quest.py` decrypts it (Blowfish ECB + a per-4-byte
-  bswap wrapper, fixed key — format reverse-engineered directly from
-  Aradi147/MHW-Quest's open-source Quest Editor, confirmed byte-for-byte
-  correct: the decrypted quest_id read back as exactly 90001, matching
-  the source file's own name, before any patching), rewrites quest ID
-  (90099), map (`Arena (Challenge)`, id 202 — chosen over Special Arena
-  for a quicker run-up to the monster, per the user), stars/rank (lowered
-  from the source's Master Rank/16-star Arch Tempered tier to 1-star/Low
-  Rank), and clears the Tempered flag on every monster slot (the source
-  quest's Great Jagras was Arch Tempered) — then re-encrypts, with a
-  decrypt-the-output round-trip assertion before ever writing the file.
-  Deployed to `nativePC/quest/questData_90099.mib` +
-  `nativePC/quest/rem/remData_90099.rem` (reward table, copied
-  byte-for-byte from the source quest under the new ID — its format
-  wasn't reverse-engineered, but it doesn't look encrypted and appears to
-  associate to a quest by filename, not an embedded ID) +
-  `nativePC/common/text/quest/q90099_<lang>.gmd` (name/description, same
-  copy-and-rename treatment — still displays the source quest's original
-  "Arch Tempered Great Jagras" text in-game, not patched). **Untested
-  live**: genuinely unknown whether a loose `.mib` under a fresh ID
-  actually surfaces in the in-game quest board without some additional
-  loader mechanism — the 90000+ ID range is a widely-used community
-  convention (this same source archive's own files reference IDs 90001
-  and 90002), which is reasonable evidence it should just work, but
-  hasn't been confirmed against this specific quest yet.
+  dead end — needs Oodle's proprietary `oo2core_8_win64.dll`, unavailable
+  anywhere on this machine or its Steam library. Worked around it: the
+  user downloaded an existing Nexus quest mod ("Arch Tempered Great
+  Jagras V2"), which ships a real, already-valid `.mib` — no chunk
+  extraction needed. `scripts/patch_arena_quest.py` decrypts it (Blowfish
+  ECB + a per-4-byte bswap wrapper, fixed key — format reverse-engineered
+  directly from Aradi147/MHW-Quest's open-source Quest Editor, confirmed
+  byte-for-byte correct: decrypted quest_id read back as exactly 90001,
+  matching the source file's own name), patches quest ID / map / stars /
+  rank / tempered flags, re-encrypts with a round-trip assertion before
+  ever writing.
+
+  **A loose `.mib` alone did nothing — the real mechanism needed a
+  separate, already-installed-but-inert plugin.** Dropping
+  `questData_90099.mib` into `nativePC/quest/` produced no visible change
+  at all, even after a restart, even when reusing quest ID 1151 (the
+  user's own frequently-recorded quest, since ID 1151 is real and
+  definitely in the game's own catalog). Root-caused by reading
+  `github.com/Strackeror/MHW-QuestLoader`'s actual source directly (its
+  author's Nexus mod page claims this functionality "is now part of
+  Stracker's Loader," which is *misleading but not exactly false* — see
+  below): quest injection is a **separate native plugin**
+  (`nativePC/plugins/QuestLoader.dll`) that hooks the game's own quest-list
+  functions (`questNoList`, category/rank checks) via signature scanning
+  at `DLL_PROCESS_ATTACH`, scanning `nativePC/quest/` for
+  `questData_%d.mib` files with `id >= 90000` *at game launch only* (so a
+  running session never picks up a new file — matches this project's
+  "reload"-needed pattern from `state_reader.lua`/LuaEngine elsewhere).
+  This plugin turned out to already be installed on this machine
+  (`nativePC/plugins/QuestLoader.dll`, dated the same day as the rest of
+  Stracker's Loader) — so it was never actually missing; the real blocker
+  was **`loader-config.json`'s `"logfile": false`**, which had been
+  silently suppressing Stracker's own diagnostic log the entire time.
+  Setting `"logfile": true` + `"logLevel": "DEBUG"` and restarting
+  produced `loader.log`, which proved decisively that the plugin *was*
+  finding, registering, and actively querying the quest (`Registered
+  quest at nativePC\quest\questData_90099.mib`, `Overriding questNoList`,
+  repeated `GetQuestCategory`/`CheckQuestLoader` calls matching real
+  browsing) — meaning the quest was real and live in the system the whole
+  time, just not where it was expected (see next finding). Do NOT install
+  the old standalone "MHW Quest Loader" Nexus mod (id 1453, 2019,
+  base-game-only) alongside this — its own `dinput8.dll` directly
+  conflicts with Stracker's Loader's (confirmed different files, would
+  have silently broken `state_reader.lua`/LuaEngine if installed; backed
+  up the working `dinput8.dll` before testing, never actually swapped
+  it).
+
+  **The "rank" byte this project had been patching is cosmetic for
+  QuestLoader's own Master Rank determination — `stars` is what actually
+  matters.** Read directly from `QuestLoader`'s hooked
+  `is_master_rank_addr` function: `return QuestIds.at(id)->starcount >
+  10;` — completely ignoring the quest file's own rank byte (offset 19).
+  Every earlier attempt to fix visibility by changing "rank" (0/1/2) had
+  zero effect on QuestLoader's categorization; lowering `stars` from the
+  source quest's original 16 down to 1 (thinking "make it easy/Low Rank")
+  is what actually broke visibility from the very first patch — 16 was
+  already a working, correctly-MR-classified value the original mod
+  author chose deliberately. Fixed by using `stars=16` again (`--rank` is
+  kept for real-MHW-semantics consistency but is a no-op for this
+  loader's own logic).
+
+  **Arch Tempered's health-bar border survived clearing the per-monster
+  Tempered checkbox** (offset `184 + 65*slot`) — caught live, since the
+  monster still showed the AT border in-game after that fix. Arch
+  Tempered turned out to be a **separate, quest-level** flag entirely,
+  packed at offset 130 as `2*ATFlag + PSGear` (found by grepping Quest
+  Editor's source for `ATFlag`) — clearing bit 1 there (keeping PSGear's
+  bit) removed the AT border for real.
+
+  **GMD name/description text is plain, unencrypted, and independently
+  patchable** — `scripts/patch_arena_quest.py --gmd-source/--gmd-output
+  --gmd-replace OLD=NEW` does an in-place find-and-replace (null-padded,
+  since the replacement can't be longer than the original without also
+  updating length/offset tables elsewhere in the file that weren't
+  reverse-engineered this pass). Used to replace the source quest's
+  leftover "The Golden Hair" / "Slay Supreme Jagras" flavor text with
+  text describing what the quest actually is now.
+
+  Final working config: quest ID 90099, `Arena (Challenge)` map (id 202),
+  `stars=16` (Master Rank via QuestLoader's own logic), both Tempered
+  flags cleared, custom name/description. Confirmed visible and
+  selectable live, 2026-09-19.
 - **Imitation-learning dataset size for Great Sword vs. Great Jagras**
   (Phase 3). No fixed target — reasoning from chat, 2026-09-18 (written
   for the old 8-action space; the tool-based space is ~230 flat calls,
