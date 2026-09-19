@@ -65,6 +65,17 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`wait_for_quest_start()`'s two phases shared one timeout budget~~ —
+  resolved 2026-09-19. Caught live: after a real ~410s hunt (recorder
+  restarted mid-hunt, so it spent that whole time in the "drain to idle"
+  phase), the session then only had ~169s of its 600s budget left to
+  catch the *next* quest-accept — nowhere near enough patience for a real
+  gap between hunts — and the session ended prematurely. Fixed by giving
+  each phase (`waiting_for_idle`, `waiting_for_quest_start`) its own full
+  `timeout_seconds` budget instead of splitting one shared deadline. Note:
+  `env/mhw_env.py`'s `reset()` has the same underlying pattern and wasn't
+  fixed — a single Phase-1 acceptance-test run is much less likely to hit
+  it, but worth remembering if it ever does.
 - ~~The camp→hunting-ground loading screen killed recording episodes~~ —
   resolved 2026-09-19. `LuaBridge`'s `max_age_seconds` defaulted to `5.0`
   — a real recorded episode died after only 14.5s/7 frames on a

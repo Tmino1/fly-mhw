@@ -89,24 +89,30 @@ class DemoRecorder:
             time.sleep(0.5)
 
     def wait_for_quest_start(self, timeout_seconds: float = 60.0) -> GameState:
-        """Mirrors MHWEnv.reset()'s Phase A/B exactly: drain a stale
-        in-progress quest back to idle first (in case one was already
-        running from a previous session), then block until a human
-        accepts a fresh quest (quest id transitions from -1/None to a
-        real id)."""
-        deadline = time.monotonic() + timeout_seconds
+        """Drain a stale in-progress quest back to idle first (in case one
+        was already running — e.g. the recorder was (re)started mid-hunt),
+        then block until a human accepts a fresh quest (quest id
+        transitions from -1/None to a real id).
 
+        Each phase gets its OWN full timeout_seconds budget, not a shared
+        one. Confirmed live 2026-09-19 why that matters: with a single
+        shared deadline (this class's original behavior, copied from
+        MHWEnv.reset() — a bug there too, not fixed there since a single
+        Phase-1 acceptance-test run is less likely to hit it), Phase A
+        patiently draining an already-in-progress ~410s hunt ate most of a
+        600s budget, leaving Phase B only ~169s to catch the next
+        quest-accept — nowhere near enough patience for a real session
+        with normal pauses between hunts.
+        """
         try:
             initial = self.lua_bridge.read()
         except StateReadError:
             initial = None
         if quest_id(initial) is not None and quest_id(initial) != -1:
-            remaining = max(0.0, deadline - time.monotonic())
-            self._wait_until(lambda s: quest_id(s) == -1, remaining, "waiting_for_idle")
+            self._wait_until(lambda s: quest_id(s) == -1, timeout_seconds, "waiting_for_idle")
 
-        remaining = max(0.0, deadline - time.monotonic())
         return self._wait_until(
-            lambda s: quest_id(s) not in (None, -1), remaining, "waiting_for_quest_start"
+            lambda s: quest_id(s) not in (None, -1), timeout_seconds, "waiting_for_quest_start"
         )
 
     def record_episode(self, episode_id: Optional[str] = None) -> EpisodeSummary:
