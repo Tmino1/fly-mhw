@@ -317,10 +317,33 @@ segmenter, label audit) carries over untouched.
   leftover "The Golden Hair" / "Slay Supreme Jagras" flavor text with
   text describing what the quest actually is now.
 
+  **Two more inherited-from-source bugs found after it became playable**,
+  both live, 2026-09-19: the actual Great Jagras still hit far harder and
+  looked oversized than a normal hunt (slot 0's `MHtP`/`MAtk` — a
+  per-monster-type difficulty-tier *index*, not a raw percentage — were
+  both `299`, and `MonsterSize` was `188`, i.e. 188%; none of these were
+  ever touched by earlier passes, which only cleared the Tempered/AT
+  flags), and small wildlife was still spawning even after emptying
+  monster slots 1-6 — turned out to come from a completely separate,
+  single, map-wide spawn block (`sMsobj`/`sMHP`/`sMAt`/`sMDe`, offset
+  627) unrelated to the per-large-monster-slot fields. Zeroed the
+  difficulty indices, set size to 100 (the only one of these that's a
+  literal percentage, confirmed by the read code populating it into a
+  plain textbox rather than a %-labeled dropdown), and zeroed the
+  small-monster spawn block.
+
+  A real 807-frame episode was recorded (`demos/storage/20260919T190805_90099`)
+  against the un-normalized version, before this last fix landed — kept,
+  still genuine (if statistically off, given the inflated monster
+  stats) Great Jagras footage. Its `distinct_quest_states_seen` included
+  `7`, a value never observed anywhere else in this project before (see
+  `docs/risks.md`'s still-open `quest.state` enum tracking).
+
   Final working config: quest ID 90099, `Arena (Challenge)` map (id 202),
   `stars=16` (Master Rank via QuestLoader's own logic), both Tempered
-  flags cleared, custom name/description. Confirmed visible and
-  selectable live, 2026-09-19.
+  flags cleared, difficulty/size normalized, no extra large or small
+  monsters, custom name/description. Confirmed visible and selectable
+  live, 2026-09-19.
 - **Imitation-learning dataset size for Great Sword vs. Great Jagras**
   (Phase 3). No fixed target — reasoning from chat, 2026-09-18 (written
   for the old 8-action space; the tool-based space is ~230 flat calls,
