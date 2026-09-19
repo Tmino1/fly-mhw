@@ -65,6 +65,28 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`highest_max_health` target selection picked the wrong entity all
+  hunt~~ — resolved 2026-09-19 (partially — see caveat). Caught live on
+  a real completed hunt: `id=7` (`health_max=12540.0`) dropped to
+  `health_current=0.0`, an exact confirmed kill matching "I killed it" —
+  but the reward model had been tracking `id=0` (`health_max=18388.5`,
+  never took damage) the entire episode, because it's an even-higher-HP
+  entity than the real target (plausibly a large map prop/set-dressing
+  object, not a combat target — `GetAllMonster()` apparently enumerates
+  those too). This is why `monster_hp_fraction` sat at `1.0` for full
+  episodes despite real hunting on screen. Fixed by setting
+  `configs/monsters/great_jagras.yaml`'s `identification.expected_ids:
+  [7]` (exact-id match already took precedence over the heuristic when
+  configured — this was always the intended fix once a real id was
+  known). **Caveat: one data point.** Unconfirmed whether Great Jagras
+  keeps the same entity id across different hunt instances — watch the
+  next few recorded episodes' `monster_hp_fraction`; if it tracks real
+  combat, `7` is stable enough, if it pins at `1.0` again the id changed
+  per-spawn and this needs a different approach (see the config's own
+  notes). Importantly, this bug never affected the recorded frames/
+  actions themselves (what IL actually needs) — only the reward-debug
+  metadata, which Design Principle 4 already keeps separate from the
+  observation/action data.
 - ~~`wait_for_quest_start()`'s two phases shared one timeout budget~~ —
   resolved 2026-09-19. Caught live: after a real ~410s hunt (recorder
   restarted mid-hunt, so it spent that whole time in the "drain to idle"

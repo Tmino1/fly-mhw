@@ -15,7 +15,7 @@ monster_state_fields:
 identification:
   strategy: "highest_max_health"
   min_health_max: 1000    # small monsters measured live at 100-300 max HP; Great Jagras is thousands
-  expected_ids: []        # fill in once the real id is known — see notes
+  expected_ids: [7]       # confirmed live 2026-09-19 — see notes. ONE data point so far.
   notes: >
     Was "first_monster" until a live check on 2026-09-14 disproved it:
     GetAllMonster() returns EVERY live monster entity, not just the quest
@@ -24,15 +24,28 @@ identification:
     it — so monsters[0] would very often track the wrong creature and
     make the whole reward signal meaningless.
 
-    "highest_max_health" + a min_health_max floor separates the large
-    quest target from small fry without hardcoding any id, since the gap
-    is large (hundreds vs. thousands). Caveat: if a second large monster
-    invades the hunt, this could pick the wrong one.
+    "highest_max_health" alone then turned out to be UNSAFE too — caught
+    live 2026-09-19 on a real completed hunt: id=7 (health_max=12540.0)
+    dropped to health_current=0.0 (an exact, confirmed kill — the player
+    reported "I killed it" at this exact moment), but TWO OTHER entities
+    were present with even higher max HP (id=0: 18388.5, id=24: 16240.0),
+    both untouched (current == max) the whole hunt. highest_max_health
+    picked id=0 for the entire episode — the reward signal tracked a
+    bogus/environmental entity (not a real combat target — plausibly a
+    large map prop/set-dressing object that GetAllMonster() also
+    enumerates) and never saw any real damage. This directly explains why
+    Phase 1's monster_hp_fraction sat at 1.0 for entire episodes despite
+    real hunting happening on screen.
 
-    The precise fix is expected_ids — run scripts/run_dummy_policy.py
-    through a real Great Jagras hunt, read the selected monster's id out
-    of the logs, and put it here. Exact id matching then takes precedence
-    over the heuristic.
+    expected_ids: [7] is the fix, pinned from that one confirmed hunt.
+    Caveat: only one data point — unconfirmed whether Great Jagras keeps
+    the same entity id across different hunt instances/sessions (could be
+    assigned per-spawn). Watch the next few recorded episodes'
+    monster_hp_fraction: if it tracks real combat (drops during fights,
+    hits ~0 near a kill) the id is stable enough; if it pins at 1.0 again,
+    the id changed and this needs re-confirming per-hunt instead of a
+    single hardcoded value — possibly a small expected_ids allowlist
+    grown over several hunts rather than one fixed id.
 
 reward:
   hp_delta_normalization: "fraction_of_max"  # deltas are delta_hp / hp_max, so weights are HP-scale-independent
@@ -52,11 +65,13 @@ episode_boundaries:
   end_signal: "monsters_emptied_or_player_zero_hp"
   max_episode_steps: 3000
   notes: >
-    quest.state's real enum values are UNCONFIRMED — only the idle value
-    (0, no active quest) has ever been observed (see
-    docs/modding_setup.md). Boundary logic intentionally does NOT read
-    quest.state. It IS logged into every step's info dict during Phase 1
-    so real transitions can be read back after a live run
-    (scripts/run_dummy_policy.py --policy idle) and folded into a v2
-    schema once known, distinguishing win/fail/abandon instead of the
-    current single "quest_ended_unknown" bucket.
+    quest.state's real enum values are still only partially observed (see
+    docs/risks.md for the full running list): 0=idle, 1/2/6=various
+    in-progress phases, 3=post-hunt-before-returning-to-camp. Terminal
+    values (cleared/failed/abandoned specifically) still unconfirmed.
+    Boundary logic intentionally does NOT read quest.state regardless —
+    it's logged into every step's info dict / the demo recorder's JSONL
+    so real transitions keep getting read back from live runs and folded
+    into a v2 schema once the full set is known, distinguishing
+    win/fail/abandon instead of the current single "quest_ended_unknown"
+    bucket.
