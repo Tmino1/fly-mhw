@@ -97,6 +97,7 @@ def main():
         capture_geometry=capture_geometry,
         step_period_seconds=args.step_period,
         output_dir=args.output_dir,
+        reset_timeout_seconds=args.reset_timeout,
     )
 
     print(f"Waiting up to {args.reset_timeout:.0f}s for a quest to start — accept one now in-game...")

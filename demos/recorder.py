@@ -55,11 +55,13 @@ class DemoRecorder:
         capture_geometry: Optional[str],
         step_period_seconds: float,
         output_dir: str | Path,
+        reset_timeout_seconds: float = 60.0,
     ):
         self.reward_model = reward_model
         self.lua_bridge = lua_bridge
         self.reducer = reducer
         self.capture_geometry = capture_geometry
+        self.reset_timeout_seconds = reset_timeout_seconds
         self.step_period_seconds = step_period_seconds
         self.output_dir = Path(output_dir)
 
@@ -108,7 +110,7 @@ class DemoRecorder:
         )
 
     def record_episode(self, episode_id: Optional[str] = None) -> EpisodeSummary:
-        start_state = self.wait_for_quest_start()
+        start_state = self.wait_for_quest_start(timeout_seconds=self.reset_timeout_seconds)
         qid = quest_id(start_state)
         episode_id = episode_id or f"{time.strftime('%Y%m%dT%H%M%S')}_{qid}"
         episode_dir = self.output_dir / episode_id

@@ -12,13 +12,19 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   second large monster invades the hunt. The exact fix is filling in
   `identification.expected_ids` once Great Jagras's real id is read out of
   `scripts/run_dummy_policy.py`'s logs (it prints the ids it selected).
-- **`quest.state`'s real enum values are still unobserved.** Only the
-  idle value (`0`, no active quest) has ever been seen. Phase 1's episode-
-  boundary logic (`env/reward.py`) deliberately doesn't depend on this —
-  it's logged into every step's `info` dict instead. Run
-  `scripts/run_dummy_policy.py --policy idle` through a real quest to find
-  out what the real values are, then update this entry and consider a v2
-  monster-config schema with a proper win/fail/abandon distinction.
+- **`quest.state`'s real enum values are still only partially observed.**
+  `0` = idle (no active quest) was already known. **New 2026-09-19:** `2`
+  = in-progress — confirmed live from a real state-file read mid-hunt
+  (`quest.id=1151`, `quest.time=43.1`, `monsters` populated with real
+  entities including one at `health_max=20637.5`, clearly the actual
+  quest target vs. the small wildlife). `1` (accepted-but-not-departed?)
+  and whatever value(s) mean cleared/failed/abandoned are still
+  unobserved. Phase 1's episode-boundary logic (`env/reward.py`)
+  deliberately doesn't depend on this regardless — it's logged into every
+  step's `info` dict / the demo recorder's JSONL instead. Next real hunt
+  recorded end-to-end (start through clear/cart) should fill in the rest;
+  update this entry and consider a v2 monster-config schema with a proper
+  win/fail/abandon distinction once the full set is known.
 - **Per-part monster HP / break flags are not in the bundled API.** Only
   whole-monster `health_current`/`health_max` is exposed by
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
@@ -48,6 +54,18 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`record_hunt.py --reset-timeout` was silently ignored~~ — resolved
+  2026-09-19. `DemoRecorder.__init__` never had a `reset_timeout_seconds`
+  parameter at all, so `record_episode()` always called
+  `wait_for_quest_start()` with its hardcoded 60s default regardless of
+  the CLI flag (which claimed a 120s default in its printed message).
+  Caught live: a real recording attempt timed out in the
+  `waiting_for_idle` phase (a quest was already active when the recorder
+  started — its Phase A logic correctly refuses to start recording
+  mid-hunt, but 60s wasn't enough budget) after almost exactly 60s, not
+  120s. Fixed by threading `reset_timeout_seconds` through
+  `DemoRecorder.__init__` → `record_episode()` → `wait_for_quest_start()`,
+  and `record_hunt.py` now actually passes `args.reset_timeout` through.
 - ~~`scripts/calibrate_keyboard_bindings.py` silently captured the wrong
   key~~ — resolved 2026-09-19. Root cause: the listener is deliberately
   non-grabbing, so the Enter/`r` keystroke used to *confirm* each binding
