@@ -41,9 +41,15 @@ from demos.keyboard_bindings import KeyboardActionReducer, KeyboardBindings, fin
 from demos.recorder import DemoRecorder  # noqa: E402
 from env.action_space import ActionSpace  # noqa: E402
 from env.game_interface.capture import find_window_geometry  # noqa: E402
-from env.game_interface.input_injector import VirtualGamepad  # noqa: E402
 from env.game_interface.lua_bridge import LuaBridge  # noqa: E402
 from env.reward import RewardModel  # noqa: E402
+
+# Must match lua_scripts/state_reader.lua's SKIP_QUEST_END_FLAG_PATH.
+# That script resolves this relative filename against the game's own
+# working directory, same as its OUTPUT_PATH (fly_mhw_state.json) — so
+# this lives right next to --state-path, not wherever this script runs
+# from.
+_SKIP_FLAG_FILENAME = "fly_mhw_skip_quest_end.flag"
 
 
 def main():
@@ -69,12 +75,12 @@ def main():
     parser.add_argument("--devices", default=None,
                          help="comma-separated device-name patterns; defaults to the bindings config's own device_name_patterns")
     parser.add_argument("--no-skip-post-hunt-wait", action="store_true",
-                         help="disable the automatic confirm-tap that skips the real post-hunt "
-                              "'return to camp' wait screen (quest.state=3). Sends ONE BTN_SOUTH "
-                              "tap via a separate virtual gamepad the recorder never uses for "
-                              "actual demo data — see demos/recorder.py's module docstring. "
-                              "Unverified that BTN_SOUTH is exactly right for this screen; disable "
-                              "if it turns out to do the wrong thing")
+                         help="disable the automatic skip of the real post-hunt 'return to camp' "
+                              "wait screen (quest.state=3). When enabled (the default), creates a "
+                              "flag file next to --state-path that lua_scripts/state_reader.lua "
+                              "watches for and acts on with a direct memory write, replicating "
+                              "SharpPluginLoader's own 'Quest End Skip' example plugin's technique "
+                              "— see demos/recorder.py's module docstring")
     args = parser.parse_args()
 
     action_space = ActionSpace.from_config(args.weapon)  # also prints any unverified-action warning
@@ -117,7 +123,10 @@ def main():
         )
 
     reducer = KeyboardActionReducer(bindings, devices)
-    post_hunt_gamepad = None if args.no_skip_post_hunt_wait else VirtualGamepad(name="fly-mhw post-hunt-skip pad")
+    skip_flag_path = (
+        None if args.no_skip_post_hunt_wait
+        else Path(args.state_path).parent / _SKIP_FLAG_FILENAME
+    )
     recorder = DemoRecorder(
         reward_model=reward_model,
         lua_bridge=LuaBridge(Path(args.state_path), max_age_seconds=args.max_state_age),
@@ -126,7 +135,7 @@ def main():
         step_period_seconds=args.step_period,
         output_dir=args.output_dir,
         reset_timeout_seconds=args.reset_timeout,
-        post_hunt_gamepad=post_hunt_gamepad,
+        skip_flag_path=skip_flag_path,
     )
 
     print(f"Recording session started. Waiting up to {args.reset_timeout:.0f}s for each "
@@ -163,8 +172,11 @@ def main():
         print("\n(Session stopped by Ctrl+C.)")
     finally:
         reducer.close()
-        if post_hunt_gamepad is not None:
-            post_hunt_gamepad.close()
+        # Don't leave the flag file behind — a stale one would make
+        # state_reader.lua keep auto-skipping during untracked play after
+        # this session ends, which is exactly what it's not supposed to do.
+        if skip_flag_path is not None:
+            skip_flag_path.unlink(missing_ok=True)
 
     print("\n=== Session summary ===")
     print(f"episodes recorded: {len(episode_summaries)}")

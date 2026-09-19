@@ -22,6 +22,7 @@
 
 local OUTPUT_PATH = "fly_mhw_state.json"
 local WRITE_INTERVAL_SECONDS = 1
+local SKIP_QUEST_END_FLAG_PATH = "fly_mhw_skip_quest_end.flag"
 
 -- Minimal JSON encoder for the specific shapes this script produces
 -- (nested tables of strings/numbers/booleans/arrays). Not general-purpose
@@ -157,6 +158,68 @@ local function write_snapshot()
   -- thing to check.
 end
 
+-- Post-hunt "return to camp" timer skip. 2026-09-19: two earlier
+-- approaches failed before this one — BTN_SOUTH via the virtual gamepad
+-- did nothing (this turned out to be a keyboard/mouse-driven UI element,
+-- not a gamepad one — confirmed via a screenshot showing a "Tab" key
+-- icon, not a gamepad glyph), and UI automation (opening the F9
+-- SharpPluginLoader menu and clicking a button) would have needed a new
+-- absolute-position pointer-click injection mechanism and been fragile
+-- to screen-coordinate/layout changes. This replicates the ACTUAL
+-- technique SharpPluginLoader's own open-source "Quest End Skip" example
+-- plugin uses (github.com/Fexty12573/SharpPluginLoader,
+-- SharpPluginLoader.Core/{Quest,Timer}.cs, read directly, not guessed):
+-- `Quest.QuestEndTimer.SetToEnd()` is just `Timer.Time = Timer.MaxTime`.
+-- QuestEndTimer lives at the sQuest singleton + 0x13198 as a direct
+-- struct (not a pointer to chase further); Timer.Time is +0x08 from
+-- there, Timer.MaxTime is +0x0C. Confirmed this is the same singleton
+-- Engine_quest.lua already resolves: SharpPluginLoader's own source lists
+-- CurrentQuestId at +0x4C and QuestState at +0x54 from that same
+-- singleton — EXACTLY the offsets Engine_quest.lua's getId()/getState()
+-- already use.
+--
+-- Only fires while SKIP_QUEST_END_FLAG_PATH exists on disk —
+-- demos/recorder.py creates/removes that file, so this never fires
+-- outside an active recording session (explicit requirement: normal
+-- untracked play should see the timer behave completely normally).
+local aob_quest_for_skip = nil
+local function quest_singleton_for_skip()
+  if not aob_quest_for_skip then
+    -- Same AOB pattern + fallback address Lua/modules/Engine_quest.lua
+    -- itself uses — copied here rather than reaching into that module's
+    -- private pointer, since it doesn't expose one.
+    aob_quest_for_skip = SearchPattern({ 0x10, 0x22, "??", 0x0F, 0x00, 0x00 })
+    if not aob_quest_for_skip then
+      aob_quest_for_skip = 0x14500ED30
+    end
+  end
+  return aob_quest_for_skip
+end
+
+local skipped_this_wait = false
+local function maybe_skip_quest_end_timer(quest_state)
+  if quest_state ~= 3 then
+    skipped_this_wait = false
+    return
+  end
+  if skipped_this_wait then
+    return
+  end
+
+  local flag = io.open(SKIP_QUEST_END_FLAG_PATH, "r")
+  if not flag then
+    return
+  end
+  flag:close()
+
+  local end_timer = quest_singleton_for_skip() + 0x13198
+  local max_time = GetAddressData(end_timer + 0x0C, "float")
+  if max_time then
+    SetAddressData(end_timer + 0x08, "float", max_time)
+    skipped_this_wait = true
+  end
+end
+
 local last_write_time = 0
 
 function on_init()
@@ -179,6 +242,8 @@ end
 -- they're visible in-game instead of silently stopping the hook.
 function on_time()
   local ok, err = pcall(function()
+    maybe_skip_quest_end_timer(Data_Quest.State)
+
     local now = os.time()
     if now - last_write_time >= WRITE_INTERVAL_SECONDS then
       last_write_time = now

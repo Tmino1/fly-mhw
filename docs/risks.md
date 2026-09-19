@@ -73,6 +73,31 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`BTN_SOUTH` never actually skipped the post-hunt screen, even once
+  correctly timed~~ — resolved 2026-09-19. After the timing fix below,
+  still confirmed live that a manual, isolated `BTN_SOUTH` tap did
+  nothing — a screenshot of the actual screen ("Select Return
+  Destination", a `Tab`-key icon for navigation) showed it's a
+  keyboard/mouse-driven UI, not a gamepad one, so no gamepad button was
+  ever going to work regardless of timing. A community mod (Yomi Utils /
+  Standalone Quest End Timer Skip, via SharpPluginLoader) does this via
+  an F9-menu button click, not a bare hotkey either — real UI automation
+  would have needed a new absolute-position pointer-click mechanism and
+  been fragile to layout changes. Real fix: SharpPluginLoader is
+  open-source — its own "Quest End Skip" example
+  (`SharpPluginLoader.Core/{Quest,Timer}.cs`) shows the actual technique
+  is a one-line memory write, `Quest.QuestEndTimer.SetToEnd()` =
+  `Timer.Time = Timer.MaxTime`, at `sQuest_singleton + 0x13198` (Timer
+  struct, `Time` at `+0x08`, `MaxTime` at `+0x0C`). Confirmed this is the
+  exact same singleton `Engine_quest.lua` already resolves — SPL's source
+  lists `CurrentQuestId`/`QuestState` at `+0x4C`/`+0x54`, matching our own
+  Lua's offsets exactly. Replicated directly in
+  `lua_scripts/state_reader.lua` (gated on a flag file `DemoRecorder`
+  creates/removes, per the "only during recording" requirement) — no
+  SharpPluginLoader dependency, no input injection, needed at all in the
+  end. The SharpPluginLoader install itself (`docs/modding_setup.md`)
+  wasn't wasted effort — reading its source is what revealed the correct
+  technique — but isn't required for this feature to work going forward.
 - ~~Post-hunt wait auto-skip never actually fired~~ — resolved 2026-09-19.
   Caught live: sitting on the real "return to camp" screen
   (`quest.state=3`) with no skip happening. Root cause: the skip call

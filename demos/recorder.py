@@ -1,22 +1,32 @@
 """
 Records a human-played hunt as synchronized (frame, action, state) demo
-data for eventual imitation learning (Phase 3 of the roadmap). During the
-actual hunt this never touches a VirtualGamepad — you play, this only
-observes: captures a frame, reduces your currently-held keyboard/mouse
-input to one action name (demos/keyboard_bindings.py), reads live game
-state, and writes both to disk.
+data for eventual imitation learning (Phase 3 of the roadmap). This never
+touches a VirtualGamepad or keyboard — you play, this only observes:
+captures a frame, reduces your currently-held keyboard/mouse input to one
+action name (demos/keyboard_bindings.py), reads live game state, and
+writes both to disk.
 
 Optional exception, off the actual demo-data path: an auto-skip for the
 real post-hunt "return to camp" wait (confirmed live to exist —
-quest.state=3, quest.id unchanged, well after a kill). If a gamepad is
-given, wait_for_quest_start()'s idle-drain phase sends ONE BTN_SOUTH tap
-(the confirm button, verified back in Phase 0) the first time it sees
-that state, instead of sitting through the wait. This never touches
-anything recorded as demo data — it only runs between episodes, on a
-gamepad the KeyboardActionReducer never sees, so it can't leak into an
-action label. UNVERIFIED that BTN_SOUTH is actually what dismisses that
-screen specifically (only that it's the general confirm button
-elsewhere) — watch the first live use of this.
+quest.state=3, quest.id unchanged, well after a kill). Two earlier
+approaches failed before this one: a BTN_SOUTH gamepad tap did nothing
+(turned out to be a keyboard/mouse-driven UI, not a gamepad one —
+confirmed via a screenshot showing a "Tab" key icon), and UI automation
+(SharpPluginLoader's F9 menu, click a button) would have needed a new
+absolute-position pointer-click injection mechanism and been fragile to
+screen/layout changes. The actual fix, if skip_flag_path is given:
+create that file the first time quest.state==3 is seen, remove it
+otherwise. lua_scripts/state_reader.lua watches for that file and, while
+it exists, replicates SharpPluginLoader's own open-source "Quest End
+Skip" example plugin's technique directly via a memory write
+(Quest.QuestEndTimer.SetToEnd(), i.e. Timer.Time = Timer.MaxTime — read
+from github.com/Fexty12573/SharpPluginLoader's actual source, not
+guessed) — no SharpPluginLoader install, no input injection, needed at
+all for this. This file is never touched during actual recording, only
+between episodes, and is created/removed here — not visible to
+KeyboardActionReducer, so it can't leak into an action label. The flag
+file only exists while a recording session is actively asking for it,
+so normal untracked play never sees this at all (explicit requirement).
 
 Reuses env/reward.py's RewardModel directly for episode-boundary
 detection and reward-debug fields (it's fully standalone — no MHWEnv/
@@ -40,10 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from evdev import ecodes
-
 from env.game_interface.capture import GrimCaptureError, capture_frame
-from env.game_interface.input_injector import VirtualGamepad
 from env.game_interface.lua_bridge import GameState, LuaBridge, StateReadError, quest_id
 from env.reward import RewardModel
 
@@ -76,7 +83,7 @@ class DemoRecorder:
         step_period_seconds: float,
         output_dir: str | Path,
         reset_timeout_seconds: float = 60.0,
-        post_hunt_gamepad: Optional[VirtualGamepad] = None,
+        skip_flag_path: Optional[str | Path] = None,
     ):
         self.reward_model = reward_model
         self.lua_bridge = lua_bridge
@@ -87,9 +94,12 @@ class DemoRecorder:
         self.output_dir = Path(output_dir)
         # See module docstring: only used to auto-skip the post-hunt
         # "return to camp" wait, never during actual recording, never
-        # visible to KeyboardActionReducer.
-        self.post_hunt_gamepad = post_hunt_gamepad
-        self._sent_post_hunt_skip = False
+        # visible to KeyboardActionReducer. Must match
+        # lua_scripts/state_reader.lua's SKIP_QUEST_END_FLAG_PATH once
+        # resolved to an absolute path (that script writes relative to
+        # the game's own working directory — see docs/modding_setup.md
+        # on where that lands under Proton).
+        self.skip_flag_path = Path(skip_flag_path) if skip_flag_path else None
 
     def _wait_until(self, predicate, timeout_seconds: float, phase_name: str, on_poll=None) -> GameState:
         # Identical pattern to env/mhw_env.py's MHWEnv._wait_until — kept
@@ -116,19 +126,20 @@ class DemoRecorder:
                 )
             time.sleep(0.5)
 
-    def _maybe_skip_post_hunt_wait(self, state: Optional[GameState]) -> None:
-        if self.post_hunt_gamepad is None or state is None:
+    def _update_skip_flag(self, state: Optional[GameState]) -> None:
+        """Create skip_flag_path while quest.state==3, remove it otherwise
+        — state_reader.lua polls for this file's existence and performs
+        the actual memory write while it's present. Idempotent (touching
+        an already-existing file, or removing an already-absent one, is a
+        cheap no-op) so this can safely be called every tick."""
+        if self.skip_flag_path is None or state is None:
             return
         quest = state.raw.get("quest")
         q_state = quest.get("state") if isinstance(quest, dict) else None
         if q_state == _POST_HUNT_WAIT_STATE:
-            if not self._sent_post_hunt_skip:
-                self.post_hunt_gamepad.tap(ecodes.BTN_SOUTH, hold_seconds=0.15)
-                self._sent_post_hunt_skip = True
+            self.skip_flag_path.touch(exist_ok=True)
         else:
-            # Reset so the NEXT hunt's post-hunt wait also gets one tap,
-            # not just the first hunt of the session.
-            self._sent_post_hunt_skip = False
+            self.skip_flag_path.unlink(missing_ok=True)
 
     def wait_for_quest_start(self, timeout_seconds: float = 60.0) -> GameState:
         """Drain a stale in-progress quest back to idle first (in case one
@@ -153,7 +164,7 @@ class DemoRecorder:
         if quest_id(initial) is not None and quest_id(initial) != -1:
             self._wait_until(
                 lambda s: quest_id(s) == -1, timeout_seconds, "waiting_for_idle",
-                on_poll=self._maybe_skip_post_hunt_wait,
+                on_poll=self._update_skip_flag,
             )
 
         return self._wait_until(
@@ -201,7 +212,7 @@ class DemoRecorder:
                 # this was supposed to skip — circular, so it never fired.
                 # Belongs in the active recording loop instead, where it
                 # can actually run while quest.state==3 is still showing.
-                self._maybe_skip_post_hunt_wait(curr_state)
+                self._update_skip_flag(curr_state)
 
                 outcome = self.reward_model.step(prev_state, curr_state, step)
 
