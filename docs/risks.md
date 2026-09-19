@@ -23,8 +23,14 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   constant while state changed from `2`→`6` suggests these encode hunt
   *phases* (e.g. engaged-in-combat vs. some other in-progress state,
   perhaps monster-captured/fleeing/a cutscene) rather than a simple
-  binary. `1` and whatever value(s) mean cleared/failed/abandoned are
-  still unobserved. Phase 1's episode-boundary logic (`env/reward.py`)
+  binary. **Third new value:** `3` — observed after a real ~410s hunt
+  completed (still `quest.id=1151`, not yet `-1`), i.e. this looks like
+  the post-hunt state (rewards/carving screen, before returning to camp)
+  — `quest.id` doesn't reset to `-1` until you actually return to the
+  hub, confirmed live: `DemoRecorder`'s "wait for idle" phase correctly
+  kept waiting through this. Whatever value(s) mean failed/abandoned
+  specifically are still unobserved. Phase 1's episode-boundary logic
+  (`env/reward.py`)
   deliberately doesn't depend on this regardless — it's logged into every
   step's `info` dict / the demo recorder's JSONL instead. Next real hunt
   recorded end-to-end (start through clear/cart) should fill in the rest;
