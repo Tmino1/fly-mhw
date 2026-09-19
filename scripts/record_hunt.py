@@ -59,6 +59,10 @@ def main():
                               "not just one hunt's worth of patience)")
     parser.add_argument("--max-episodes", type=int, default=None,
                          help="stop after recording this many hunts (default: unlimited, Ctrl+C to stop)")
+    parser.add_argument("--max-state-age", type=float, default=20.0,
+                         help="how stale (seconds) the game-state file can get before a read counts "
+                              "as an error and ends the episode — see LuaBridge's docstring for why "
+                              "this isn't tiny (loading-screen pauses, not just real crashes)")
     parser.add_argument("--capture-geometry", default=None,
                          help="auto-detected via find_window_geometry() if omitted")
     parser.add_argument("--devices", default=None,
@@ -107,7 +111,7 @@ def main():
     reducer = KeyboardActionReducer(bindings, devices)
     recorder = DemoRecorder(
         reward_model=reward_model,
-        lua_bridge=LuaBridge(Path(args.state_path)),
+        lua_bridge=LuaBridge(Path(args.state_path), max_age_seconds=args.max_state_age),
         reducer=reducer,
         capture_geometry=capture_geometry,
         step_period_seconds=args.step_period,

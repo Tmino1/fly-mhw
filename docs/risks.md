@@ -59,6 +59,15 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~The camp→hunting-ground loading screen killed recording episodes~~ —
+  resolved 2026-09-19. `LuaBridge`'s `max_age_seconds` defaulted to `5.0`
+  — a real recorded episode died after only 14.5s/7 frames on a
+  `state_read_error` (file 5.9s old) right at the start of the hunt.
+  Confirmed it wasn't a real crash: the state file was fresh again the
+  moment loading finished, no `reload` needed. Bumped the default to
+  `20.0` (a real crash/unload stays stale indefinitely regardless, so
+  this doesn't weaken that detection) and added `record_hunt.py
+  --max-state-age` to override per-run if 20s ever isn't enough.
 - ~~`record_hunt.py --reset-timeout` was silently ignored~~ — resolved
   2026-09-19. `DemoRecorder.__init__` never had a `reset_timeout_seconds`
   parameter at all, so `record_episode()` always called

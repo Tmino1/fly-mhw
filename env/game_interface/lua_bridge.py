@@ -33,7 +33,7 @@ class GameState:
 
 
 class LuaBridge:
-    def __init__(self, state_path: Path, max_age_seconds: float = 5.0):
+    def __init__(self, state_path: Path, max_age_seconds: float = 20.0):
         """
         state_path: where state_reader.lua's OUTPUT_PATH actually resolves
             to on the Linux filesystem. This is NOT known in advance under
@@ -41,7 +41,15 @@ class LuaBridge:
             pass it in here; there's no reliable default to guess.
         max_age_seconds: how stale the file's mtime can be before reads are
             treated as an error (i.e. the Lua script has stopped writing —
-            script unloaded, game closed, crash, etc.).
+            script unloaded, game closed, crash, etc.). Was 5.0 — confirmed
+            live 2026-09-19 that's too strict: the camp-to-hunting-ground
+            loading screen alone paused Lua updates past 5s and killed a
+            real recording episode after only 14.5s, even though
+            state_reader.lua was fine (state file was fresh again the
+            moment loading finished, no reload needed). Bumped to 20s,
+            which still catches a real crash/unload just fine — that stays
+            stale indefinitely, so a longer window doesn't weaken that
+            detection, it just tolerates legitimate multi-second pauses.
         """
         self.state_path = state_path
         self.max_age_seconds = max_age_seconds
