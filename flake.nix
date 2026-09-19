@@ -82,14 +82,10 @@
           #   nix run .#calibrate-keyboard-bindings -- --weapon configs/weapons/greatsword.yaml
 
           record-hunt = mkScriptApp "scripts/record_hunt.py";
-          # requires --weapon/--monster/--keyboard-bindings/--state-path,
-          # same "input" group prerequisite as calibrate-keyboard-bindings
-          # above — e.g.:
-          #   nix run .#record-hunt -- \
-          #     --weapon configs/weapons/greatsword.yaml \
-          #     --monster configs/monsters/great_jagras.yaml \
-          #     --keyboard-bindings configs/keyboard_bindings.yaml \
-          #     --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json"
+          # nix run .#record-hunt   — zero args needed, defaults to this
+          # project's one pilot pair + this machine's MHW install (see
+          # scripts/record_hunt.py's own defaults for overrides). Same
+          # "input" group prerequisite as calibrate-keyboard-bindings above.
         };
       });
 }

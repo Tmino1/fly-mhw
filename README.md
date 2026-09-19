@@ -124,6 +124,8 @@ nix run .#run-dummy-policy -- \
   --monster configs/monsters/great_jagras.yaml \
   --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
   --policy idle
+nix run .#calibrate-keyboard-bindings -- --weapon configs/weapons/greatsword.yaml
+nix run .#record-hunt   # zero args needed — defaults to the pilot pair + this machine's MHW install
 ```
 
 `nix develop` is still there for anything not wrapped as an app yet (e.g.

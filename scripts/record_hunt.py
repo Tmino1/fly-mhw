@@ -17,13 +17,10 @@ aggregate summary); it also ends on its own if nothing starts within
 --reset-timeout of waiting (default 10 minutes — generous, since between
 hunts you might restock/travel/chat, not just immediately requeue).
 
-Usage:
-    python scripts/record_hunt.py \
-        --weapon configs/weapons/greatsword.yaml \
-        --monster configs/monsters/great_jagras.yaml \
-        --keyboard-bindings configs/keyboard_bindings.yaml \
-        --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
-        [--max-episodes N]
+Usage (all args default to this project's one pilot pair + this
+machine's MHW install — see --help for overrides):
+    nix run .#record-hunt
+    python scripts/record_hunt.py [--max-episodes N]
 
 Accept a quest in-game once this prints that it's waiting for one — it'll
 go back to waiting automatically after each hunt ends.
@@ -51,13 +48,26 @@ from env.reward import RewardModel  # noqa: E402
 # from.
 _SKIP_FLAG_FILENAME = "fly_mhw_skip_quest_end.flag"
 
+# This project's one pilot pair (docs/architecture.md: "Target pair: Great
+# Jagras, with the Great Sword") and this machine's one fixed MHW install
+# — defaulted so `nix run .#record-hunt` works with zero arguments, since
+# every session so far has used exactly these. Still fully overridable via
+# CLI flags (e.g. for a second weapon/monster pair later, or a different
+# machine's Steam library path).
+_DEFAULT_WEAPON = "configs/weapons/greatsword.yaml"
+_DEFAULT_MONSTER = "configs/monsters/great_jagras.yaml"
+_DEFAULT_KEYBOARD_BINDINGS = "configs/keyboard_bindings.yaml"
+_DEFAULT_STATE_PATH = str(
+    Path.home() / ".local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json"
+)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--weapon", required=True)
-    parser.add_argument("--monster", required=True)
-    parser.add_argument("--keyboard-bindings", required=True)
-    parser.add_argument("--state-path", required=True)
+    parser.add_argument("--weapon", default=_DEFAULT_WEAPON)
+    parser.add_argument("--monster", default=_DEFAULT_MONSTER)
+    parser.add_argument("--keyboard-bindings", default=_DEFAULT_KEYBOARD_BINDINGS)
+    parser.add_argument("--state-path", default=_DEFAULT_STATE_PATH)
     parser.add_argument("--output-dir", default="demos/storage")
     parser.add_argument("--step-period", type=float, default=0.2)
     parser.add_argument("--reset-timeout", type=float, default=600.0,
