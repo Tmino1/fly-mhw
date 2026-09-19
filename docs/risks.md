@@ -5,17 +5,6 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
-- **`/dev/input` permissions needed for demo recording.** `demos/recorder.py`
-  reads raw keyboard/mouse events (to translate your real input into the
-  weapon config's action names — see `docs/architecture.md`'s Phase 3
-  decisions), which needs `/dev/input/eventN` access. Confirmed live
-  2026-09-18: this user isn't in the `input` group and the keyboard
-  (`Keychron Keychron Q65 Keyboard`, `/dev/input/event9`) has no per-user
-  ACL, unlike `/dev/uinput`. Fix is `users.users.ad.extraGroups` +
-  `"input"` in `~/nix-conf/configuration.nix` (outside this repo) —
-  needs `sudo nixos-rebuild switch` **and a full logout/re-login**, since
-  group membership doesn't retroactively apply to already-running shells.
-  Move to Resolved once confirmed live with a real recording session.
 - **Target selection is heuristic, not exact.** `GetAllMonster()` returns
   every live monster entity, so `configs/monsters/great_jagras.yaml` uses
   `highest_max_health` + a `min_health_max: 1000` floor to separate the
@@ -59,6 +48,21 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`/dev/input` permissions needed for demo recording~~ — resolved
+  2026-09-19: `users.users.ad.extraGroups` + `"input"` added to
+  `~/nix-conf/configuration.nix`, `sudo nixos-rebuild switch`, then a
+  full reboot (a plain re-login wasn't tested — a reboot was used and
+  confirmed sufficient). Confirmed live: `groups` now includes `input`,
+  and `open("/dev/input/event9", "rb")` succeeds directly. Along the way,
+  a real second bug was caught before it caused silently-missing data:
+  the default `--devices keychron,mouse` pattern would never have
+  matched this machine's actual mouse — it reports as `Logitech PRO X`,
+  containing neither "keychron" nor "mouse". Any mouse-button action
+  bindings (e.g. attacks) would have been silently invisible to the
+  recorder. Fixed by changing the default to `keychron,logitech` in both
+  `scripts/calibrate_keyboard_bindings.py` and `scripts/record_hunt.py`,
+  confirmed via `find_input_devices()` now returning both the keyboard
+  and `Logitech PRO X`.
 - ~~MHW mispositioned itself on the wrong monitor, wrong size ("framing"
   looked broken), and mouse felt odd~~ — resolved 2026-09-18. Root cause:
   a known, still-open Hyprland/XWayland bug

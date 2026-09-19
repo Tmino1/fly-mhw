@@ -13,7 +13,7 @@ fans events out to every open reader).
 Usage:
     python scripts/calibrate_keyboard_bindings.py --weapon configs/weapons/greatsword.yaml
     python scripts/calibrate_keyboard_bindings.py --weapon configs/weapons/greatsword.yaml \
-        --devices keychron,mouse --output configs/keyboard_bindings.yaml
+        --devices keychron,logitech --output configs/keyboard_bindings.yaml
 
 If --devices doesn't match anything, every available device's path/name
 is printed so you can pick better patterns (same fallback list_windows.py
@@ -53,8 +53,12 @@ def wait_for_keypress(devices, prompt: str) -> int:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--weapon", required=True, help="path to configs/weapons/*.yaml")
-    parser.add_argument("--devices", default="keychron,mouse",
-                         help="comma-separated case-insensitive substrings to match device names")
+    parser.add_argument("--devices", default="keychron,logitech",
+                         help="comma-separated case-insensitive substrings to match device names "
+                              "(default matches this machine's keyboard and mouse — confirmed live "
+                              "2026-09-19: the real mouse reports as 'Logitech PRO X', which contains "
+                              "neither 'keychron' nor 'mouse' in its name, so a naive 'mouse' pattern "
+                              "would silently miss it entirely)")
     parser.add_argument("--output", default="configs/keyboard_bindings.yaml")
     args = parser.parse_args()
 

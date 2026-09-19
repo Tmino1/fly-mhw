@@ -77,7 +77,7 @@ def main():
 
     device_patterns = (
         args.devices.split(",") if args.devices
-        else bindings.device_name_patterns or ["keychron", "mouse"]
+        else bindings.device_name_patterns or ["keychron", "logitech"]
     )
     try:
         devices = find_input_devices(device_patterns)
