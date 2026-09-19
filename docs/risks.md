@@ -73,6 +73,20 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~Post-hunt wait auto-skip never actually fired~~ — resolved 2026-09-19.
+  Caught live: sitting on the real "return to camp" screen
+  (`quest.state=3`) with no skip happening. Root cause: the skip call
+  lived only in `wait_for_quest_start()`'s idle-drain phase, which only
+  runs AFTER the episode ends — but `RewardModel` only ends the episode
+  once the ENTIRE raw monster list goes empty (`monsters == []`), which
+  doesn't happen until you're fully back at the hub and the whole map's
+  wildlife unloads too. That's the exact same wait the skip was supposed
+  to shortcut, so it was unreachable. Fixed by also calling it from
+  inside `record_episode()`'s own per-step loop, where it can run while
+  `quest.state==3` is still showing (kept in both places — the
+  idle-drain-phase call is still useful for a `player_cart` ending, which
+  terminates the episode immediately and reaches the post-quest UI only
+  afterward).
 - ~~`highest_max_health` target selection picked the wrong entity all
   hunt~~ — resolved 2026-09-19 (partially — see caveat). Caught live on
   a real completed hunt: `id=7` (`health_max=12540.0`) dropped to

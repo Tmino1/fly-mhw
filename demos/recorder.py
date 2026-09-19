@@ -191,6 +191,18 @@ class DemoRecorder:
                     termination_reason = f"state_read_error: {exc}"
                     break
 
+                # Bug found live 2026-09-19: this call used to live only in
+                # wait_for_quest_start()'s idle-drain phase, which only
+                # runs AFTER the episode ends — but the episode can't end
+                # until RewardModel sees the ENTIRE raw monster list go
+                # empty (curr_monsters_empty = monsters == []), which only
+                # happens once you're fully back at the hub and the whole
+                # map's wildlife unloads too. That's the exact same wait
+                # this was supposed to skip — circular, so it never fired.
+                # Belongs in the active recording loop instead, where it
+                # can actually run while quest.state==3 is still showing.
+                self._maybe_skip_post_hunt_wait(curr_state)
+
                 outcome = self.reward_model.step(prev_state, curr_state, step)
 
                 frame_path = episode_dir / f"frame_{step:06d}.png"
