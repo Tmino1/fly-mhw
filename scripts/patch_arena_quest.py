@@ -87,6 +87,7 @@ def patch_quest(
     detemper_slots: bool,
     clear_extra_monsters: bool = True,
     normalize_difficulty: bool = True,
+    difficulty_row: int = 100,
 ) -> None:
     """Mutates plain (the decrypted quest struct, header included — offsets
     here are relative to byte 4, matching Quest Editor's own data2[] /
@@ -134,19 +135,26 @@ def patch_quest(
         # 2026-09-19, playing a "1-star" quest against a monster that was
         # still oversized and hit far harder than a normal hunt.
         #
-        # MHtP/MAtk/MDef index into em_difficulty.dtt_dif - a SINGLE
-        # universal 1000-row table (not per-monster, despite being
+        # MHtP/MAtk/MDef ("Health"/"Attack"/"Defense" per the actual UI
+        # labels in MainWindow.xaml, confirmed - not guessed from the
+        # variable names alone) index into em_difficulty.dtt_dif - a
+        # SINGLE universal 1000-row table (not per-monster, despite being
         # per-slot fields), 36 bytes/row, float percentages at fixed
         # sub-offsets (+8 HP%, +12 Attack%, +16 Defense%). Downloaded and
-        # parsed this file directly rather than guessing: row 0 (this
+        # parsed this file directly rather than guessing. Row 0 (this
         # script's first attempt at "normal") is actually HP=10%/ATK=50%/
-        # DEF=70% - a WEAK tier, not baseline, confirmed live by the
-        # opposite complaint ("not enough health and damage") after
-        # setting it. Row 100 is exactly HP=100%/ATK=100%/DEF=100% and the
-        # table stays flat there through at least row 500 - a genuine,
-        # clean baseline.
+        # DEF=70% - a WEAK tier, confirmed live by the opposite complaint
+        # ("not enough health and damage"). Row 100 is exactly
+        # HP=100%/ATK=100%/DEF=100%, a genuine baseline - but confirmed
+        # live this makes Great Jagras (an inherently weak, early-game
+        # monster) die almost instantly against real Master Rank gear,
+        # which isn't a data bug, just not useful for a demo-recording
+        # hunt that needs to last long enough to exercise real actions.
+        # difficulty_row picks a tougher-than-baseline row instead -
+        # row 20 is HP=70%/ATK=120%/DEF=170%, row 50 is HP=160%/ATK=250%/
+        # DEF=320% (values read directly from the table, not estimated).
         for off in (185, 189, 193):  # MHtP, MAtk, MDef
-            set_i32(off, 100)
+            set_i32(off, difficulty_row)
         # MHAR/MSeT (offsets 197, 205) are populated as raw row numbers,
         # not %-labeled - i.e. NOT percentage fields at all (likely a
         # hitzone/element table selector), so left at whatever
@@ -208,12 +216,14 @@ def main():
                               "Jagras quest had two other large monsters and small wildlife in these slots, "
                               "which DO spawn on other maps too, not just the source's original one.")
     parser.add_argument("--keep-difficulty", action="store_true",
-                         help="don't normalize slot 0's difficulty-tier indices (MHtP/MAtk/MDef/MHAR/MSeT) to "
-                              "0 or MonsterSize to 100, and don't clear the separate map-wide small-monster "
-                              "spawn config (sMsobj/sMHP/sMAt/sMDe) — default: normalize/clear all of it. The "
-                              "source Arch Tempered quest left the actual monster hitting far harder and "
-                              "looking oversized even after de-tempering, plus spawning extra small wildlife "
-                              "through a spawn config separate from the 7 large-monster slots.")
+                         help="don't touch slot 0's difficulty-tier row or MonsterSize, and don't clear the "
+                              "separate map-wide small-monster spawn config (sMsobj/sMHP/sMAt/sMDe) — default: "
+                              "normalize/clear all of it.")
+    parser.add_argument("--difficulty-row", type=int, default=100,
+                         help="row into em_difficulty.dtt_dif's 1000-row table for slot 0's Health/Attack/"
+                              "Defense (see patch_quest's comment for confirmed values) — 100 is the genuine "
+                              "100%%/100%%/100%% baseline; higher rows are tougher, e.g. 50 is "
+                              "160%%HP/250%%ATK/320%%DEF. MonsterSize is always set to 100 (%%) regardless.")
     parser.add_argument("--skip-mib", action="store_true",
                          help="skip .mib patching entirely — use with --gmd-* to only patch text")
     parser.add_argument("--gmd-source", help="a .gmd (name/description) file to also patch, in place semantics "
@@ -243,6 +253,7 @@ def main():
             detemper_slots=not args.keep_tempered,
             clear_extra_monsters=not args.keep_extra_monsters,
             normalize_difficulty=not args.keep_difficulty,
+            difficulty_row=args.difficulty_row,
         )
 
         new_raw = encipher(bytes(plain))
