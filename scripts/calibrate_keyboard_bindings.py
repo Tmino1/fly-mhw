@@ -36,6 +36,27 @@ from demos.keyboard_bindings import code_name, find_input_devices  # noqa: E402
 from env.action_space import ActionSpace  # noqa: E402
 
 
+def drain_events(devices) -> None:
+    """Discard any events already buffered on devices, non-blockingly.
+
+    Real bug found live (2026-09-19): the listener is deliberately
+    non-grabbing (see module docstring), so every terminal keystroke used
+    to CONFIRM a binding — pressing Enter, or 'r' to retry — also lands as
+    a raw event on the keyboard device we're watching. Left undrained,
+    that leftover event was picked up by the *next* wait_for_keypress()
+    call before the user could press their real key/button, silently
+    capturing e.g. KEY_ENTER instead of an actual mouse click. Call this
+    right before waiting for each new action.
+    """
+    while True:
+        ready, _, _ = select.select(devices, [], [], 0)
+        if not ready:
+            return
+        for dev in ready:
+            for _ in dev.read():
+                pass
+
+
 def wait_for_keypress(devices, prompt: str) -> int:
     """Block until a key/button DOWN event arrives on any of devices,
     return its evdev code. Uses select() to multiplex the real file
@@ -73,6 +94,7 @@ def main():
     try:
         for action_name in action_names:
             while True:
+                drain_events(devices)  # discard any stale event from the previous confirm/retry prompt
                 code = wait_for_keypress(
                     devices, f"--- Press your key/button for {action_name!r} now ---"
                 )

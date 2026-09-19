@@ -1,0 +1,33 @@
+schema: "fly-mhw/keyboard_bindings/v1"
+weapon_config: "configs/weapons/greatsword.yaml"
+device_name_patterns: ['keychron', 'logitech']
+calibrated_at: "2026-09-19T00:00:00+00:00"
+notes: >
+  idle is intentionally not bound -- it is the reducer's fallback when
+  no other listed action's key/button is currently held. See
+  demos/keyboard_bindings.py's ACTION_PRIORITY for the multi-key
+  reduction rule used when more than one bound key is held at once.
+
+  Written directly from the user's own reported bindings in chat
+  (2026-09-19), not captured via scripts/calibrate_keyboard_bindings.py's
+  interactive live-event capture -- the key names below (KEY_W/S/A/D,
+  KEY_SPACE, BTN_LEFT, BTN_RIGHT) are all standard/unambiguous evdev
+  codes, but this file hasn't been independently verified against real
+  event codes the way the interactive tool would. If actions come back
+  wrong during recording, re-run the calibration script for real
+  live-captured codes instead of hand-edited ones.
+bindings:
+  - action: move_forward
+    key: KEY_W
+  - action: move_backward
+    key: KEY_S
+  - action: strafe_left
+    key: KEY_A
+  - action: strafe_right
+    key: KEY_D
+  - action: attack_1
+    key: BTN_LEFT
+  - action: attack_2
+    key: BTN_RIGHT
+  - action: dodge
+    key: KEY_SPACE

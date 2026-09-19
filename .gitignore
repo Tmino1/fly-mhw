@@ -11,3 +11,8 @@ result-*
 # recorded demo episodes (frames + JSONL) — large per-episode dumps,
 # same treatment as .venv/
 /demos/storage/
+
+# isolated worktrees for background subagents (e.g. the Phase 2
+# connectome-brain agent) — separate workspaces, reviewed/merged
+# manually, never committed directly here
+/.claude/

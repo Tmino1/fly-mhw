@@ -48,6 +48,22 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~`scripts/calibrate_keyboard_bindings.py` silently captured the wrong
+  key~~ — resolved 2026-09-19. Root cause: the listener is deliberately
+  non-grabbing, so the Enter/`r` keystroke used to *confirm* each binding
+  also landed as a raw event on the very keyboard device being watched —
+  left undrained, the *next* `wait_for_keypress()` call picked up that
+  stale leftover event instead of the user's actual next key/button press
+  (symptom: reported as "can't detect mouse input," since a mouse-bound
+  action like `attack_1` would silently capture a stale `KEY_ENTER` from
+  the previous confirmation instead of the real click). Confirmed via a
+  standalone raw-event diagnostic that device-level delivery was fine
+  before concluding it was a script-logic bug, not a permissions/device
+  one. Fixed with a `drain_events()` call before each
+  `wait_for_keypress()`. Note `demos/recorder.py`'s actual recording path
+  was never affected — it queries live kernel key-state directly
+  (`device.active_keys()`), not a drained event queue, so this bug was
+  isolated to the calibration tool.
 - ~~`/dev/input` permissions needed for demo recording~~ — resolved
   2026-09-19: `users.users.ad.extraGroups` + `"input"` added to
   `~/nix-conf/configuration.nix`, `sudo nixos-rebuild switch`, then a
