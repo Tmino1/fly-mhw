@@ -7,3 +7,7 @@ __pycache__/
 # nix build output symlink, if ever used
 result
 result-*
+
+# recorded demo episodes (frames + JSONL) — large per-episode dumps,
+# same treatment as .venv/
+/demos/storage/

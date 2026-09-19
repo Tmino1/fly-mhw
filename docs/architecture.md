@@ -53,6 +53,15 @@ this repo self-contained (plus one new principle Phase 1 added):
 | Episode-boundary detection | Built only from confirmed signals: `quest.id`'s `-1` ↔ real-id transition, the monster list emptying, `player.health_current <= 0` | `quest.state`'s real enum values have never been observed (only the idle value `0` has) — boundary logic intentionally never branches on it, to avoid hardcoding a guess. It's logged into every step's `info` dict for later analysis instead. |
 | `gymnasium` dependency | Not added yet — `MHWEnv` mirrors Gymnasium's `reset()`/`step()` tuple shapes as a plain class | Matches the project's stated dependency discipline (heavier deps land in Phase 2 with the brain work). Converting to a real `gymnasium.Env` subclass later is mechanical. `PyYAML` is the one new Phase 1 dependency actually needed, for `configs/*.yaml`. |
 
+## Phase 3 decisions
+
+| Concern | Decision | Why |
+|---|---|---|
+| Recording your real (keyboard + mouse) input | Calibrate, never guess: `scripts/calibrate_keyboard_bindings.py` watches real key/button-down events while you press your actual in-game keys, writes `configs/keyboard_bindings.yaml` | MHW's `config.ini` has no keyboard-binding section, so real bindings are unknowable from config alone. A passive (non-`.grab()`'d) `evdev.InputDevice` open reads keyboard *and* mouse device events without interfering with normal use — confirmed live. |
+| Multiple keys held at once → one action per tick | `demos/keyboard_bindings.py`'s `ACTION_PRIORITY`: `attack_1, attack_2, dodge` win over the four movement actions | Real play routinely holds movement while attacking (e.g. a forward lunge); the discrete action space has no compound action for that, so a precedence rule is needed. Collisions are logged, not silently dropped — a diagnostic for the open "how much data is enough" question. |
+| Demo storage format | Per-frame PNG (`Pillow`, already a dependency) + a JSONL sidecar per episode — no video-encoding dependency | Zero new Python deps for a first pass; `wf-recorder` (already in `flake.nix`'s devShell) stays available as an escape hatch if storage/IO ever becomes the bottleneck. |
+| Episode-boundary reuse | `demos/recorder.py` imports `env/reward.py`'s `RewardModel` directly (fully standalone, no `MHWEnv`/gamepad dependency) and the promoted `quest_id()` helper (moved from `mhw_env.py`'s private `_quest_id` into `env/game_interface/lua_bridge.py`) | Confirmed both were already decoupled enough to reuse as-is — avoided reimplementing episode-boundary logic a second time. |
+
 ## Not yet decided (later phases)
 
 - Full connectome scale vs. a scoped-down subset (Phase 2 — needs measured

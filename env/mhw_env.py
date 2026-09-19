@@ -21,17 +21,8 @@ from .action_space import ActionSpace
 from .config_loader import load_config  # re-exported for convenience/tests
 from .game_interface.capture import CaptureResult, GrimCaptureError, capture_frame
 from .game_interface.input_injector import VirtualGamepad
-from .game_interface.lua_bridge import GameState, LuaBridge, StateReadError
+from .game_interface.lua_bridge import GameState, LuaBridge, StateReadError, quest_id as _quest_id
 from .reward import RewardModel
-
-
-def _quest_id(state: Optional[GameState]) -> Optional[int]:
-    if state is None:
-        return None
-    quest = state.raw.get("quest")
-    if not isinstance(quest, dict):
-        return None
-    return quest.get("id")
 
 
 class MHWEnv:

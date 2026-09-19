@@ -5,6 +5,17 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
+- **`/dev/input` permissions needed for demo recording.** `demos/recorder.py`
+  reads raw keyboard/mouse events (to translate your real input into the
+  weapon config's action names — see `docs/architecture.md`'s Phase 3
+  decisions), which needs `/dev/input/eventN` access. Confirmed live
+  2026-09-18: this user isn't in the `input` group and the keyboard
+  (`Keychron Keychron Q65 Keyboard`, `/dev/input/event9`) has no per-user
+  ACL, unlike `/dev/uinput`. Fix is `users.users.ad.extraGroups` +
+  `"input"` in `~/nix-conf/configuration.nix` (outside this repo) —
+  needs `sudo nixos-rebuild switch` **and a full logout/re-login**, since
+  group membership doesn't retroactively apply to already-running shells.
+  Move to Resolved once confirmed live with a real recording session.
 - **Target selection is heuristic, not exact.** `GetAllMonster()` returns
   every live monster entity, so `configs/monsters/great_jagras.yaml` uses
   `highest_max_health` + a `min_health_max: 1000` floor to separate the

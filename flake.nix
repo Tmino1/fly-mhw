@@ -75,6 +75,21 @@
           #     --monster configs/monsters/great_jagras.yaml \
           #     --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
           #     --policy idle
+
+          calibrate-keyboard-bindings = mkScriptApp "scripts/calibrate_keyboard_bindings.py";
+          # requires --weapon; also needs this user in the "input" group
+          # to read /dev/input/eventN (see docs/risks.md) — e.g.:
+          #   nix run .#calibrate-keyboard-bindings -- --weapon configs/weapons/greatsword.yaml
+
+          record-hunt = mkScriptApp "scripts/record_hunt.py";
+          # requires --weapon/--monster/--keyboard-bindings/--state-path,
+          # same "input" group prerequisite as calibrate-keyboard-bindings
+          # above — e.g.:
+          #   nix run .#record-hunt -- \
+          #     --weapon configs/weapons/greatsword.yaml \
+          #     --monster configs/monsters/great_jagras.yaml \
+          #     --keyboard-bindings configs/keyboard_bindings.yaml \
+          #     --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json"
         };
       });
 }

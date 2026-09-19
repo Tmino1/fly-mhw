@@ -18,7 +18,7 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Optional
 
 
 class StateReadError(RuntimeError):
@@ -85,3 +85,18 @@ class LuaBridge:
                 if consecutive_errors > 5:
                     raise
             time.sleep(interval_seconds)
+
+
+def quest_id(state: Optional[GameState]) -> Optional[int]:
+    """The current quest's id out of a GameState snapshot, or None if
+    state is None or malformed. -1 means "no active quest" (idle) —
+    confirmed live; any other value means a quest is in progress.
+    Promoted out of env/mhw_env.py's private _quest_id (2026-09-18) so
+    demos/recorder.py can share the exact same quest-start detection
+    instead of reimplementing it — see docs/architecture.md."""
+    if state is None:
+        return None
+    quest = state.raw.get("quest")
+    if not isinstance(quest, dict):
+        return None
+    return quest.get("id")
