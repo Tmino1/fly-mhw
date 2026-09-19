@@ -95,23 +95,40 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Phase 0 verification
+## Getting set up again (each session)
 
-`lua_scripts/state_reader.lua` is already installed to the game's `Lua/`
-folder. Launch MHW, open the in-game chat (Insert by default — works in
-single-player too, LuaEngine repurposes the local text box as a command
-console) and run `reload state_reader`. Then, from a `nix develop` shell:
+1. Launch MHW via Steam.
+2. In-game, open the chat box (**Insert** by default — works in
+   single-player too, LuaEngine repurposes the local text box as a command
+   console) and run `reload state_reader`. (If you ever edit
+   `lua_scripts/state_reader.lua`, re-copy it into the game's `Lua/`
+   folder first — it's not symlinked, the game reads its own copy.)
+3. Confirm state is flowing: `nix run .#verify-state-read` — should
+   stream a fresh player/monster/quest snapshot every second. `Ctrl-C` to
+   stop.
+4. (Optional) Confirm input reaches the game: `nix run
+   .#verify-input-injection` — MHW focused, somewhere harmless. See
+   `docs/modding_setup.md`'s Steam Input note if it doesn't land.
+
+## `nix run` apps
+
+Every script in `scripts/` has a matching app — no `nix develop` shell
+needed for these, each one builds/caches on first use:
 
 ```sh
-python scripts/verify_state_read.py
+nix run .#verify-state-read
+nix run .#verify-input-injection
+nix run .#list-windows              # dump Hyprland window class/title/geometry — see docs/performance_tuning.md
+nix run .#run-dummy-policy -- \
+  --weapon configs/weapons/greatsword.yaml \
+  --monster configs/monsters/great_jagras.yaml \
+  --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
+  --policy idle
 ```
 
-To check the virtual-gamepad input path (make sure MHW is focused and you're
-somewhere safe to see a controller press land, e.g. the main menu):
+`nix develop` is still there for anything not wrapped as an app yet (e.g.
+`python tests/test_reward.py`, or ad-hoc `python -c "..."` checks).
 
-```sh
-python scripts/verify_input_injection.py
-```
-
-Both are described in [`docs/modding_setup.md`](docs/modding_setup.md) and
-are the Phase 0 "done when" criteria from the roadmap.
+Both `verify-state-read` and `verify-input-injection` are described in
+[`docs/modding_setup.md`](docs/modding_setup.md) and are the Phase 0
+"done when" criteria from the roadmap.

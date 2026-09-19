@@ -22,6 +22,26 @@
           pillow # decode PNG frames from grim
           pyyaml # configs/*.yaml (env/config_loader.py)
         ]);
+
+        # `nix run .#<name> -- <args>` for every script in scripts/, instead
+        # of `nix develop` + `python scripts/<name>.py <args>`. Each script
+        # resolves its own imports (env.game_interface, ...) relative to
+        # __file__, so pointing python straight at the copy of the script
+        # inside `self` (the flake's own source) works with no extra
+        # PYTHONPATH wiring — same as running it from a `nix develop` shell
+        # at the repo root.
+        mkScriptApp = scriptRelPath: {
+          type = "app";
+          # PYTHONUNBUFFERED=1: without it, Python fully buffers stdout
+          # whenever it's not a TTY (piped, redirected, `nix run ... | tee
+          # log`, etc.) — confirmed live: output was silently lost with a
+          # bare `timeout N nix run .#verify-state-read > log` until this
+          # was added, not just a testing artifact.
+          program = "${pkgs.writeShellScript (builtins.baseNameOf scriptRelPath) ''
+            export PYTHONUNBUFFERED=1
+            exec ${pythonEnv}/bin/python ${self}/${scriptRelPath} "$@"
+          ''}";
+        };
       in
       {
         devShells.default = pkgs.mkShell {
@@ -41,6 +61,20 @@
             echo "Try: python scripts/verify_state_read.py"
             echo "     python scripts/verify_input_injection.py"
           '';
+        };
+
+        apps = {
+          verify-state-read = mkScriptApp "scripts/verify_state_read.py";
+          verify-input-injection = mkScriptApp "scripts/verify_input_injection.py";
+          list-windows = mkScriptApp "scripts/list_windows.py";
+          run-dummy-policy = mkScriptApp "scripts/run_dummy_policy.py";
+          # run_dummy_policy.py requires --weapon/--monster/--state-path —
+          # e.g.:
+          #   nix run .#run-dummy-policy -- \
+          #     --weapon configs/weapons/greatsword.yaml \
+          #     --monster configs/monsters/great_jagras.yaml \
+          #     --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
+          #     --policy idle
         };
       });
 }

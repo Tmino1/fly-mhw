@@ -48,6 +48,30 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Resolved
 
+- ~~MHW mispositioned itself on the wrong monitor, wrong size ("framing"
+  looked broken), and mouse felt odd~~ — resolved 2026-09-18. Root cause:
+  a known, still-open Hyprland/XWayland bug
+  ([hyprwm/Hyprland#2350](https://github.com/hyprwm/Hyprland/issues/2350))
+  where self-positioning by an XWayland client fails on a monitor at a
+  non-zero offset — confirmed live via `hyprctl clients -j`: MHW's own
+  `graphics_option.ini` asked for `PosX=1945` (on `DP-1`, the ultrawide,
+  which starts at `x=1920`), but the window actually landed at `0,0` on
+  `HDMI-A-1` instead. **Not fixable from the game's own settings** — the
+  fix is a Hyprland window rule forcing placement from the compositor
+  side, added to `~/nix-conf/caelestia-shell.nix` (outside this repo —
+  that's this machine's NixOS/Home-Manager config):
+  ```
+  windowrule = [ "match:class steam_app_582010, monitor DP-1, fullscreen 1" ];
+  ```
+  (Hit one real syntax bug first: this Hyprland version dropped
+  `windowrulev2` entirely in favor of a `match:PROP VALUE, EFFECT
+  VALUE, ...` syntax where every effect needs an explicit value — a bare
+  `fullscreen` with no value threw a parse error, `fullscreen 1` fixed
+  it.) Confirmed live afterward via `nix run .#list-windows`: MHW's
+  window is now at `1920,0 3440x1440`, exactly matching `DP-1`'s full
+  geometry. The mouse oddness was very likely a symptom of the same
+  wrong-monitor/wrong-size window rather than a separate bug — worth
+  revisiting only if it's still noticeable now that positioning is fixed.
 - ~~`grim`-based capture captured the whole desktop instead of just
   MHW~~ — resolved 2026-09-18, confirmed live with the game running:
   `find_window_geometry()`'s guessed pattern (`steam_app_582010`) matched
