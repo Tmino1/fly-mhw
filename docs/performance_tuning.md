@@ -53,14 +53,26 @@ running (window was `0,0 1920x1080` at the time):
 | | fps |
 |---|---|
 | Uncropped (full desktop) | 0.97 |
-| Cropped (`find_window_geometry()`) | **5.00** |
+| Cropped (`find_window_geometry()`), PNG | 5.00 |
+| Cropped, JPEG (now the default — see below) | **33.8** |
 
-~5x improvement. Note this uncropped number is *with the game running*
-and thus under real GPU load — it's not directly comparable to the
-original ~2.4 fps Phase 0 baseline, which was measured desktop-idle with
-the game closed (see `docs/risks.md`'s Resolved section for the full
-note). 5 fps is a real improvement but still a coarse control rate — see
-`docs/risks.md`'s Open section for the follow-up if Phase 4 needs faster.
+~5x improvement from cropping alone. Note this uncropped number is *with
+the game running* and thus under real GPU load — it's not directly
+comparable to the original ~2.4 fps Phase 0 baseline, which was measured
+desktop-idle with the game closed (see `docs/risks.md`'s Resolved section
+for the full note). The PNG row was measured at a `1920x1080` window; the
+JPEG row was measured later at this project's current, larger
+`3324x1374` ultrawide capture geometry — not a strictly apples-to-apples
+comparison, but JPEG's per-frame numbers (10x grim throughput, 4x PIL
+decode, 2.8x smaller files — see `env/game_interface/capture.py`'s module
+docstring and `docs/architecture.md`'s Phase 3 decisions table for the
+full measurement) were taken back-to-back against PNG at that *same*
+geometry, so the format comparison itself is solid even though this row
+isn't a clean re-run of the original PNG baseline. 33.8 fps comfortably
+clears the ~5fps step-rate this project has been budgeting for — capture
+is very unlikely to be the bottleneck anymore; see `docs/risks.md`'s Open
+section for what else might matter if Phase 4 ever needs to go faster
+still.
 
 ## In-game settings, ranked by FPS impact when lowered
 

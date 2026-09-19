@@ -245,8 +245,16 @@ class DemoRecorder:
 
                 outcome = self.reward_model.step(prev_state, curr_state, step)
 
-                frame_name = f"frame_{step:06d}.png"
-                capture.image.save(episode_dir / frame_name)
+                # Writes grim's raw encoded bytes directly — capture.image
+                # is only decoded for callers that need pixels immediately
+                # (e.g. live inference); re-encoding it here would be a
+                # second, wasted encode pass on top of grim's own. See
+                # env/game_interface/capture.py's module docstring for the
+                # PNG->JPEG throughput numbers this depends on.
+                frame_ext = "jpg" if capture.raw_format == "jpeg" else capture.raw_format
+                frame_path = episode_dir / f"frame_{step:06d}.{frame_ext}"
+                frame_path.write_bytes(capture.raw_bytes)
+                frame_name = frame_path.name
 
                 if outcome.quest_state_raw not in distinct_quest_states:
                     distinct_quest_states.append(outcome.quest_state_raw)
