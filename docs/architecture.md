@@ -178,6 +178,32 @@ segmenter, label audit) carries over untouched.
 - A proper win/fail/abandon distinction for episode endings, once
   `quest.state`'s real values are observed from a live run (see
   `configs/monsters/great_jagras.yaml`'s `episode_boundaries.notes`).
+- **Starting a quest programmatically, without walking to the Handler.**
+  Raised 2026-09-19 — user's call: deferred for now, "probably more
+  important for RL when we get there" (RL fine-tuning needs far more
+  episode restarts than IL data collection, so the per-restart friction
+  matters more there). Found the real mechanism but didn't build it, given
+  the risk: SharpPluginLoader's own source (`Quest.cs`, already installed
+  on this machine) exposes the native function the game calls internally
+  on quest accept — `AcceptQuest(questMgr, questId, bool)` at a known
+  address (`AddressRepository.Get("Quest:AcceptQuest")`), which
+  SharpPluginLoader already *hooks* (intercepts) but doesn't itself call
+  directly anywhere in the file. A small custom SharpPluginLoader C#
+  plugin could call it directly via the same `NativeFunction<...>`
+  wrapper the file already uses for `GetQuestName` — buildable on Linux
+  with the dotnet SDK, no Wine needed, same deployment path (drop the DLL
+  in `nativePC/plugins/csharp/`) already used for Yomi Utils. **Not
+  attempted**: unlike the quest-end-timer skip (a plain memory read/write,
+  safe and well-scoped), this means *calling* a native function, and
+  `questMgr`'s correct value is inferred, not confirmed — every other
+  hooked function in the same file (`EnterQuest`, `LeaveQuest`,
+  `AbandonQuest`, etc.) takes the same `nint questMgr` first parameter and
+  none reference any singleton besides `sQuest`, so `questMgr ==
+  Quest.SingletonInstance.Instance` (the same pointer this project's own
+  `state_reader.lua` already resolves for the timer skip) is a reasonable
+  inference — but if it's wrong, the likely failure mode is a game crash,
+  not a quiet no-op. Whoever picks this up should test on a throwaway
+  session, not mid-recording.
 - **Imitation-learning dataset size for Great Sword vs. Great Jagras**
   (Phase 3). No fixed target — reasoning from chat, 2026-09-18 (written
   for the old 8-action space; the tool-based space is ~230 flat calls,
