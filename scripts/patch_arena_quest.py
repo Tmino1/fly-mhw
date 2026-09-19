@@ -85,6 +85,7 @@ def patch_quest(
     stars: int,
     rank: int,
     detemper_slots: bool,
+    clear_extra_monsters: bool = True,
 ) -> None:
     """Mutates plain (the decrypted quest struct, header included — offsets
     here are relative to byte 4, matching Quest Editor's own data2[] /
@@ -112,6 +113,19 @@ def patch_quest(
         # monster - caught live, 2026-09-19. Clear the AT bit, preserve
         # whatever PSGear was.
         plain[4 + 130] &= 0b01
+
+    if clear_extra_monsters:
+        # The source quest's slots 1-6 were never touched by earlier
+        # patches, on the (wrong) assumption that a non-open-world map
+        # just wouldn't spawn them. Caught live, 2026-09-19: the Arena
+        # (Challenge) map DOES spawn them — slot 1 was "Seething
+        # Bazelgeuse (IB)" (raw monster id 76) and slot 4 was "Tigrex
+        # (IB)" (raw id 61), both large monsters showing up alongside the
+        # intended Great Jagras. Setting a slot's monster id to -1
+        # (SelectedIndex 0 = "None" in Quest Editor's own dropdown) empties
+        # it, matching how slots 5-6 were already unset in the source file.
+        for slot in range(1, 7):
+            set_i32(172 + 65 * slot, -1)
 
 
 def patch_gmd_text(data: bytearray, old: bytes, new: bytes) -> None:
@@ -150,6 +164,11 @@ def main():
     parser.add_argument("--keep-tempered", action="store_true",
                          help="don't clear any monster slot's Tempered flag, or the separate quest-level "
                               "Arch Tempered flag at offset 130 (default: clear both)")
+    parser.add_argument("--keep-extra-monsters", action="store_true",
+                         help="don't clear monster slots 1-6, leaving whatever the source quest had there "
+                              "(default: clear them, keeping only slot 0). The source Arch Tempered Great "
+                              "Jagras quest had two other large monsters and small wildlife in these slots, "
+                              "which DO spawn on other maps too, not just the source's original one.")
     parser.add_argument("--skip-mib", action="store_true",
                          help="skip .mib patching entirely — use with --gmd-* to only patch text")
     parser.add_argument("--gmd-source", help="a .gmd (name/description) file to also patch, in place semantics "
@@ -177,6 +196,7 @@ def main():
             stars=args.stars,
             rank=args.rank,
             detemper_slots=not args.keep_tempered,
+            clear_extra_monsters=not args.keep_extra_monsters,
         )
 
         new_raw = encipher(bytes(plain))
