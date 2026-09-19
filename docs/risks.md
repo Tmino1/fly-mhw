@@ -17,9 +17,14 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   = in-progress — confirmed live from a real state-file read mid-hunt
   (`quest.id=1151`, `quest.time=43.1`, `monsters` populated with real
   entities including one at `health_max=20637.5`, clearly the actual
-  quest target vs. the small wildlife). `1` (accepted-but-not-departed?)
-  and whatever value(s) mean cleared/failed/abandoned are still
-  unobserved. Phase 1's episode-boundary logic (`env/reward.py`)
+  quest target vs. the small wildlife). **Also new, same session:** `6` —
+  observed on the *same* quest id (`1151`) later in the same hunt
+  (`quest.time=94.6`, still climbing, so not yet ended) — the id staying
+  constant while state changed from `2`→`6` suggests these encode hunt
+  *phases* (e.g. engaged-in-combat vs. some other in-progress state,
+  perhaps monster-captured/fleeing/a cutscene) rather than a simple
+  binary. `1` and whatever value(s) mean cleared/failed/abandoned are
+  still unobserved. Phase 1's episode-boundary logic (`env/reward.py`)
   deliberately doesn't depend on this regardless — it's logged into every
   step's `info` dict / the demo recorder's JSONL instead. Next real hunt
   recorded end-to-end (start through clear/cart) should fill in the rest;
