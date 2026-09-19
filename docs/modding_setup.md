@@ -107,6 +107,53 @@ was found and fixed:
 
 This is meant to be a living doc — keep updating it as Phase 1 finds more.
 
+## SharpPluginLoader (2026-09-19) — for the post-hunt timer skip
+
+Installed to get a real, working "skip the return-to-camp timer" —
+`docs/risks.md` has the full story of why our own `BTN_SOUTH`-based
+attempt never worked (it's a keyboard-driven UI, not a gamepad one).
+[Fexty12573/SharpPluginLoader](https://github.com/Fexty12573/SharpPluginLoader)
+(v1.0.0, officially supports Linux/Proton as of 0.0.7.2) plus the
+[Standalone Quest End Timer Skip](https://www.nexusmods.com/monsterhunterworld/mods/7538)
+plugin (the standalone one specifically — **not** the full "Yomi Utils"
+cheat menu bundled on the same page, which also has damage/stamina/item
+cheats that could silently corrupt recorded demo data if left on by
+accident).
+
+Install steps actually taken on this machine:
+1. `nativePC/plugins/CSharp/Loader/` + `ucrtbase.dll` extracted from the
+   SPL Linux release into the MHW install dir (same tree Stracker's
+   Loader already uses).
+2. `nativePC/plugins/CSharp/StandaloneQuestEndSkip/standalonequestendskip.dll`
+   — the actual plugin, downloaded from Nexus (manual — needs a browser).
+3. **.NET 8 Desktop Runtime + `d3dcompiler_47`, installed into the Wine
+   prefix directly** (not the Linux side — this machine's `dotnet` check
+   on PATH is irrelevant, SPL runs inside the Windows/Wine process).
+   `protontricks` couldn't auto-detect this machine's Proton (a
+   Nix-packaged `proton-cachyos` build, not one Steam's own tooling
+   discovers) — worked around by calling `winetricks` directly against
+   the known prefix, wrapped in `steam-run` (NixOS needs this for any
+   generic dynamically-linked Linux binary, which is what nixpkgs' wine
+   build is) with `NIXPKGS_ALLOW_UNFREE=1 --impure`:
+   ```sh
+   export WINEPREFIX="$HOME/.local/share/Steam/steamapps/compatdata/582010/pfx"
+   export WINE=".../proton-cachyos/bin/files/bin/wine"
+   export WINESERVER=".../proton-cachyos/bin/files/bin/wineserver"
+   export PATH=".../proton-cachyos/bin/files/bin:$PATH"
+   NIXPKGS_ALLOW_UNFREE=1 nix shell --impure nixpkgs#steam-run nixpkgs#winetricks \
+     -c steam-run winetricks --unattended dotnetdesktop8 d3dcompiler_47
+   ```
+   Confirmed live: `drive_c/Program Files/dotnet/shared/.../8.0.12` and
+   `drive_c/windows/{system32,syswow64}/d3dcompiler_47.dll` both present
+   afterward.
+4. Steam launch option, since Stracker's Loader is already in use too:
+   `WINEDLLOVERRIDES="ucrtbase,dinput8=n,b" %command%`
+5. In-game: `F9` opens the SharpPluginLoader menu. The timer-skip plugin
+   is hotkey-triggered (confirmed via its own docs — not automatic), which
+   conveniently means it does nothing during normal play unless something
+   actually presses that hotkey. Exact default hotkey: **TODO, check the
+   F9 menu once loaded**.
+
 ## Input injection note (Steam Input)
 
 The input-injection backend (`env/game_interface/input_injector.py`) creates
