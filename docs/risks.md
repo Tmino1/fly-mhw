@@ -28,9 +28,17 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   the post-hunt state (rewards/carving screen, before returning to camp)
   — `quest.id` doesn't reset to `-1` until you actually return to the
   hub, confirmed live: `DemoRecorder`'s "wait for idle" phase correctly
-  kept waiting through this. Whatever value(s) mean failed/abandoned
-  specifically are still unobserved. Phase 1's episode-boundary logic
-  (`env/reward.py`)
+  kept waiting through this. **Fourth new value, same session:** `4` —
+  observed on the first fully-successful recorded episode
+  (`demos/storage/20260918T212155_1151`), whose `distinct_quest_states`
+  came out as `[1, 2, 3, 4]` across one complete hunt lifecycle
+  (accept→combat→post-hunt-wait→?). `4` is a strong candidate for the
+  actual "quest cleared" terminal signal, appearing right before the
+  return to `quest.id=-1` — not yet confirmed which exact transition
+  produces it though (need to check the JSONL's per-step
+  `reward_debug.quest_state_raw` sequence, not just the deduped set).
+  Whatever value(s) mean failed/abandoned specifically are still
+  unobserved. Phase 1's episode-boundary logic (`env/reward.py`)
   deliberately doesn't depend on this regardless — it's logged into every
   step's `info` dict / the demo recorder's JSONL instead. Next real hunt
   recorded end-to-end (start through clear/cart) should fill in the rest;

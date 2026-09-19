@@ -1,10 +1,22 @@
 """
 Records a human-played hunt as synchronized (frame, action, state) demo
-data for eventual imitation learning (Phase 3 of the roadmap). Unlike
-env/mhw_env.py, this never touches a VirtualGamepad — you play, this only
+data for eventual imitation learning (Phase 3 of the roadmap). During the
+actual hunt this never touches a VirtualGamepad — you play, this only
 observes: captures a frame, reduces your currently-held keyboard/mouse
 input to one action name (demos/keyboard_bindings.py), reads live game
 state, and writes both to disk.
+
+Optional exception, off the actual demo-data path: an auto-skip for the
+real post-hunt "return to camp" wait (confirmed live to exist —
+quest.state=3, quest.id unchanged, well after a kill). If a gamepad is
+given, wait_for_quest_start()'s idle-drain phase sends ONE BTN_SOUTH tap
+(the confirm button, verified back in Phase 0) the first time it sees
+that state, instead of sitting through the wait. This never touches
+anything recorded as demo data — it only runs between episodes, on a
+gamepad the KeyboardActionReducer never sees, so it can't leak into an
+action label. UNVERIFIED that BTN_SOUTH is actually what dismisses that
+screen specifically (only that it's the general confirm button
+elsewhere) — watch the first live use of this.
 
 Reuses env/reward.py's RewardModel directly for episode-boundary
 detection and reward-debug fields (it's fully standalone — no MHWEnv/
@@ -28,11 +40,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from evdev import ecodes
+
 from env.game_interface.capture import GrimCaptureError, capture_frame
+from env.game_interface.input_injector import VirtualGamepad
 from env.game_interface.lua_bridge import GameState, LuaBridge, StateReadError, quest_id
 from env.reward import RewardModel
 
 from .keyboard_bindings import KeyboardActionReducer
+
+# The confirmed-real (2026-09-19) post-hunt quest.state value seen while
+# quest.id is still non-idle, well after a kill — the "return to camp"
+# wait screen. See docs/risks.md's quest.state notes.
+_POST_HUNT_WAIT_STATE = 3
 
 
 @dataclass
@@ -56,6 +76,7 @@ class DemoRecorder:
         step_period_seconds: float,
         output_dir: str | Path,
         reset_timeout_seconds: float = 60.0,
+        post_hunt_gamepad: Optional[VirtualGamepad] = None,
     ):
         self.reward_model = reward_model
         self.lua_bridge = lua_bridge
@@ -64,8 +85,13 @@ class DemoRecorder:
         self.reset_timeout_seconds = reset_timeout_seconds
         self.step_period_seconds = step_period_seconds
         self.output_dir = Path(output_dir)
+        # See module docstring: only used to auto-skip the post-hunt
+        # "return to camp" wait, never during actual recording, never
+        # visible to KeyboardActionReducer.
+        self.post_hunt_gamepad = post_hunt_gamepad
+        self._sent_post_hunt_skip = False
 
-    def _wait_until(self, predicate, timeout_seconds: float, phase_name: str) -> GameState:
+    def _wait_until(self, predicate, timeout_seconds: float, phase_name: str, on_poll=None) -> GameState:
         # Identical pattern to env/mhw_env.py's MHWEnv._wait_until — kept
         # as a second small copy rather than a shared import, since
         # MHWEnv's version isn't currently a free function/staticmethod
@@ -77,6 +103,8 @@ class DemoRecorder:
         while True:
             try:
                 state = self.lua_bridge.read()
+                if on_poll:
+                    on_poll(state)
                 if predicate(state):
                     return state
             except StateReadError:
@@ -87,6 +115,20 @@ class DemoRecorder:
                     f"{timeout_seconds}s waiting on lua_bridge state"
                 )
             time.sleep(0.5)
+
+    def _maybe_skip_post_hunt_wait(self, state: Optional[GameState]) -> None:
+        if self.post_hunt_gamepad is None or state is None:
+            return
+        quest = state.raw.get("quest")
+        q_state = quest.get("state") if isinstance(quest, dict) else None
+        if q_state == _POST_HUNT_WAIT_STATE:
+            if not self._sent_post_hunt_skip:
+                self.post_hunt_gamepad.tap(ecodes.BTN_SOUTH, hold_seconds=0.15)
+                self._sent_post_hunt_skip = True
+        else:
+            # Reset so the NEXT hunt's post-hunt wait also gets one tap,
+            # not just the first hunt of the session.
+            self._sent_post_hunt_skip = False
 
     def wait_for_quest_start(self, timeout_seconds: float = 60.0) -> GameState:
         """Drain a stale in-progress quest back to idle first (in case one
@@ -109,7 +151,10 @@ class DemoRecorder:
         except StateReadError:
             initial = None
         if quest_id(initial) is not None and quest_id(initial) != -1:
-            self._wait_until(lambda s: quest_id(s) == -1, timeout_seconds, "waiting_for_idle")
+            self._wait_until(
+                lambda s: quest_id(s) == -1, timeout_seconds, "waiting_for_idle",
+                on_poll=self._maybe_skip_post_hunt_wait,
+            )
 
         return self._wait_until(
             lambda s: quest_id(s) not in (None, -1), timeout_seconds, "waiting_for_quest_start"
