@@ -86,6 +86,7 @@ def patch_quest(
     rank: int,
     detemper_slots: bool,
     clear_extra_monsters: bool = True,
+    normalize_difficulty: bool = True,
 ) -> None:
     """Mutates plain (the decrypted quest struct, header included — offsets
     here are relative to byte 4, matching Quest Editor's own data2[] /
@@ -126,6 +127,34 @@ def patch_quest(
         # it, matching how slots 5-6 were already unset in the source file.
         for slot in range(1, 7):
             set_i32(172 + 65 * slot, -1)
+
+    if normalize_difficulty:
+        # Slot 0 (the actual Great Jagras) inherited the source Arch
+        # Tempered quest's difficulty-tier indices directly - caught live,
+        # 2026-09-19, playing a "1-star" quest against a monster that was
+        # still oversized and hit far harder than a normal hunt. These
+        # SelectedIndex fields index into a PER-MONSTER difficulty table
+        # (Quest Editor loads it from Data/em_difficulty.dtt_dif) rather
+        # than being raw percentages, so 0 isn't verified to mean exactly
+        # "100%" for every monster type - but it's the first/base entry in
+        # every such dropdown, the standard "weakest tier" convention, and
+        # is a large drop from what was actually set (MHtP/MAtk were both
+        # 299, MonsterSize 188 i.e. a directly-scaled percentage was 188%).
+        for off in (185, 189, 193, 197, 205):  # MHtP, MAtk, MDef, MHAR, MSeT
+            set_i32(off, 0)
+        set_i32(201, 100)  # MonsterSize - unlike the above, this IS a plain percentage
+
+        # The small-monster/wildlife spawn config is a SEPARATE, single,
+        # map-wide block (not per-large-monster-slot) - clearing slots 1-6
+        # above did nothing for it. sMsobj=60 (a real spawn-object
+        # reference) was what actually caused the extra small monsters
+        # the user saw even after slots 1-6 were emptied; 0 matches how
+        # large-monster slot 0's own sobj_id field already meant "no
+        # override" in the source file.
+        set_i32(627, 0)  # sMsobj
+        set_i32(631, 0)  # sMHP
+        set_i32(635, 0)  # sMAt
+        set_i32(639, 0)  # sMDe
 
 
 def patch_gmd_text(data: bytearray, old: bytes, new: bytes) -> None:
@@ -169,6 +198,13 @@ def main():
                               "(default: clear them, keeping only slot 0). The source Arch Tempered Great "
                               "Jagras quest had two other large monsters and small wildlife in these slots, "
                               "which DO spawn on other maps too, not just the source's original one.")
+    parser.add_argument("--keep-difficulty", action="store_true",
+                         help="don't normalize slot 0's difficulty-tier indices (MHtP/MAtk/MDef/MHAR/MSeT) to "
+                              "0 or MonsterSize to 100, and don't clear the separate map-wide small-monster "
+                              "spawn config (sMsobj/sMHP/sMAt/sMDe) — default: normalize/clear all of it. The "
+                              "source Arch Tempered quest left the actual monster hitting far harder and "
+                              "looking oversized even after de-tempering, plus spawning extra small wildlife "
+                              "through a spawn config separate from the 7 large-monster slots.")
     parser.add_argument("--skip-mib", action="store_true",
                          help="skip .mib patching entirely — use with --gmd-* to only patch text")
     parser.add_argument("--gmd-source", help="a .gmd (name/description) file to also patch, in place semantics "
@@ -197,6 +233,7 @@ def main():
             rank=args.rank,
             detemper_slots=not args.keep_tempered,
             clear_extra_monsters=not args.keep_extra_monsters,
+            normalize_difficulty=not args.keep_difficulty,
         )
 
         new_raw = encipher(bytes(plain))
