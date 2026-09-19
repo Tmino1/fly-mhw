@@ -132,16 +132,25 @@ def patch_quest(
         # Slot 0 (the actual Great Jagras) inherited the source Arch
         # Tempered quest's difficulty-tier indices directly - caught live,
         # 2026-09-19, playing a "1-star" quest against a monster that was
-        # still oversized and hit far harder than a normal hunt. These
-        # SelectedIndex fields index into a PER-MONSTER difficulty table
-        # (Quest Editor loads it from Data/em_difficulty.dtt_dif) rather
-        # than being raw percentages, so 0 isn't verified to mean exactly
-        # "100%" for every monster type - but it's the first/base entry in
-        # every such dropdown, the standard "weakest tier" convention, and
-        # is a large drop from what was actually set (MHtP/MAtk were both
-        # 299, MonsterSize 188 i.e. a directly-scaled percentage was 188%).
-        for off in (185, 189, 193, 197, 205):  # MHtP, MAtk, MDef, MHAR, MSeT
-            set_i32(off, 0)
+        # still oversized and hit far harder than a normal hunt.
+        #
+        # MHtP/MAtk/MDef index into em_difficulty.dtt_dif - a SINGLE
+        # universal 1000-row table (not per-monster, despite being
+        # per-slot fields), 36 bytes/row, float percentages at fixed
+        # sub-offsets (+8 HP%, +12 Attack%, +16 Defense%). Downloaded and
+        # parsed this file directly rather than guessing: row 0 (this
+        # script's first attempt at "normal") is actually HP=10%/ATK=50%/
+        # DEF=70% - a WEAK tier, not baseline, confirmed live by the
+        # opposite complaint ("not enough health and damage") after
+        # setting it. Row 100 is exactly HP=100%/ATK=100%/DEF=100% and the
+        # table stays flat there through at least row 500 - a genuine,
+        # clean baseline.
+        for off in (185, 189, 193):  # MHtP, MAtk, MDef
+            set_i32(off, 100)
+        # MHAR/MSeT (offsets 197, 205) are populated as raw row numbers,
+        # not %-labeled - i.e. NOT percentage fields at all (likely a
+        # hitzone/element table selector), so left at whatever
+        # detemper_slots/the source already set rather than guessed here.
         set_i32(201, 100)  # MonsterSize - unlike the above, this IS a plain percentage
 
         # The small-monster/wildlife spawn config is a SEPARATE, single,
