@@ -65,6 +65,17 @@ this repo self-contained (plus one new principle Phase 1 added):
 
 ## Not yet decided (later phases)
 
+- **Whether to expand the Great Sword action space to cover clutch claw
+  and slinger bursts.** Raised 2026-09-19: both are real parts of
+  high-level Great Sword play (clutch claw wall-bang topples, slinger
+  elemental-phial application) and relevant prep for tougher targets like
+  Alatreon specifically. Currently out of scope on purpose — the action
+  space is a deliberate minimal first pass (see the Phase 1 decisions
+  table above). Left open rather than decided either way; until it's
+  decided, **don't use clutch claw/slinger during recorded hunts** — the
+  current action space has no binding for them, so those frames would
+  get mislabeled `idle` while real actions happen on screen, corrupting
+  the demo data. Fine to use them in hunts that aren't being recorded.
 - Full connectome scale vs. a scoped-down subset (Phase 2 — needs measured
   parameter count / forward-pass latency first).
 - A proper win/fail/abandon distinction for episode endings, once
