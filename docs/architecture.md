@@ -76,6 +76,25 @@ this repo self-contained (plus one new principle Phase 1 added):
   current action space has no binding for them, so those frames would
   get mislabeled `idle` while real actions happen on screen, corrupting
   the demo data. Fine to use them in hunts that aren't being recorded.
+
+  **If/when this is decided, the natural mechanism is a staged expansion,
+  not a dynamic one** (raised in chat, 2026-09-19): IL only ever learns
+  what's in the demonstration data — there's no exploration process for a
+  behavior-cloned policy to "discover" that new actions became available
+  mid-training the way an RL curriculum might unlock content. So this
+  isn't "the model gradually opens up its own action space" — it's
+  collect a second demo batch with the expanded moveset, then continue
+  training on the combined dataset with a larger action space. The
+  architecture already has a hook for this: `env/action_space.py`'s
+  `ButtonOp.op` reserves `"press"`/`"release"` (unimplemented) for
+  exactly this kind of charge-hold mechanic, and since only a small
+  trainable surface is ever learned (gains/biases/encoders/readout — see
+  Design Principle 1), growing the action space later should mean
+  keeping the trained recurrent core and warm-start fine-tuning just a
+  grown readout layer, not retraining from scratch. Recommended
+  sequencing: get one clean basic-moveset IL policy working end-to-end
+  first, treat this expansion as a deliberate v2 stage after — not
+  something to fold into the first training pass.
 - Full connectome scale vs. a scoped-down subset (Phase 2 — needs measured
   parameter count / forward-pass latency first).
 - A proper win/fail/abandon distinction for episode endings, once
