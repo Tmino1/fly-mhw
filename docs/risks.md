@@ -44,6 +44,16 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   recorded end-to-end (start through clear/cart) should fill in the rest;
   update this entry and consider a v2 monster-config schema with a proper
   win/fail/abandon distinction once the full set is known.
+  **2026-09-19: the full clean-win sequence is now confirmed** — the
+  first ever episode in this project to end via `termination_reason:
+  "monster_defeated"` (every prior episode ended via the unrelated
+  `state_read_error` bug instead — see this file's Resolved section)
+  recorded `distinct_quest_states_seen: [1, 2, 3, 4, 0]`: accept(1) →
+  combat(2) → post-hunt wait(3) → cleared(4) → back to idle(0),
+  confirming `4` really is the "quest cleared" terminal value. Recorded
+  against the arena quest (`docs/architecture.md`'s Great Jagras arena
+  quest entry), not quest 1151, but the state machine itself is quest-
+  independent. Fail/abandon values are still unobserved.
 - **Per-part monster HP / break flags are not in the bundled API.** Only
   whole-monster `health_current`/`health_max` is exposed by
   `Engine_monster.lua`. Monster configs (Phase 1) that want part-break
