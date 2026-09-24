@@ -68,24 +68,34 @@
           verify-input-injection = mkScriptApp "scripts/verify_input_injection.py";
           list-windows = mkScriptApp "scripts/list_windows.py";
           run-dummy-policy = mkScriptApp "scripts/run_dummy_policy.py";
-          # run_dummy_policy.py requires --weapon/--monster/--state-path —
-          # e.g.:
+          # run_dummy_policy.py requires --monster/--state-path (--tools
+          # defaults to the Great Sword tools config) — e.g.:
           #   nix run .#run-dummy-policy -- \
-          #     --weapon configs/weapons/greatsword.yaml \
           #     --monster configs/monsters/great_jagras.yaml \
           #     --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
           #     --policy idle
 
           calibrate-keyboard-bindings = mkScriptApp "scripts/calibrate_keyboard_bindings.py";
-          # requires --weapon; also needs this user in the "input" group
-          # to read /dev/input/eventN (see docs/risks.md) — e.g.:
-          #   nix run .#calibrate-keyboard-bindings -- --weapon configs/weapons/greatsword.yaml
+          # needs this user in the "input" group to read /dev/input/eventN
+          # (see docs/risks.md) — e.g.:
+          #   nix run .#calibrate-keyboard-bindings
 
           record-hunt = mkScriptApp "scripts/record_hunt.py";
           # nix run .#record-hunt   — zero args needed, defaults to this
           # project's one pilot pair + this machine's MHW install (see
           # scripts/record_hunt.py's own defaults for overrides). Same
           # "input" group prerequisite as calibrate-keyboard-bindings above.
+
+          # Tool-based action space (docs/architecture.md):
+          verify-tools = mkScriptApp "scripts/verify_tools.py";
+          # MHW focused, weapon drawn — runs each move's shortest combo
+          # path from neutral; --chain a,b,c for a specific sequence.
+          audit-tool-labels = mkScriptApp "scripts/audit_tool_labels.py";
+          # checks recorded demos' labels + the moveset graph's declared
+          # and candidate edges against the game's own lmtIDs.
+          relabel-demos = mkScriptApp "scripts/relabel_demos.py";
+          # re-labels recorded v2 episodes from their raw events after a
+          # graph/timing/bindings change.
         };
       });
 }

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+LEGACY (v1 8-action space): for the tool-based action space use
+scripts/verify_tools.py instead. Kept for configs/weapons/greatsword.yaml.
+
 Phase 1 check: human-in-the-loop verification of a weapon config's
 button/axis mapping against the live game — mirrors
 verify_input_injection.py's style (hold the pad open, give real time for

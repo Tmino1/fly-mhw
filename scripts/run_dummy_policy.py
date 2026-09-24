@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 Phase 1 acceptance test: run an idle-then-random dummy policy through
-MHWEnv against a live quest, logging every step for review.
+MHWEnv against a live quest, logging every step for review. Actions are
+tool calls (configs/weapons/*_tools.yaml): idle = wait(short); random =
+uniform over the calls the moveset graph currently allows (the action
+mask), or over the whole flat tool space with --ignore-mask (then most
+graph moves come back as logged invalid no-ops).
 
 Recommended order (see the plan / docs/architecture.md):
-  1. scripts/verify_action_mapping.py first, to correct the weapon config.
+  1. scripts/verify_tools.py first, to confirm the tool inputs live.
   2. This script with --policy idle through one full quest — confirms
      reset()'s start detection fires and logs real quest.state
      transitions without ever sending a meaningful attack.
@@ -14,7 +18,7 @@ Recommended order (see the plan / docs/architecture.md):
 
 Usage:
     python scripts/run_dummy_policy.py \
-        --weapon configs/weapons/greatsword.yaml \
+        --tools configs/weapons/greatsword_tools.yaml \
         --monster configs/monsters/great_jagras.yaml \
         --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
         --policy idle --max-steps 500
@@ -40,10 +44,12 @@ from env.mhw_env import MHWEnv  # noqa: E402
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--weapon", required=True)
+    parser.add_argument("--tools", default="configs/weapons/greatsword_tools.yaml")
     parser.add_argument("--monster", required=True)
     parser.add_argument("--state-path", required=True)
     parser.add_argument("--policy", choices=["idle", "random"], default="idle")
+    parser.add_argument("--ignore-mask", action="store_true",
+                         help="random policy samples the full flat tool space, not just currently-valid calls")
     parser.add_argument("--max-steps", type=int, default=500)
     parser.add_argument("--step-period", type=float, default=0.2)
     parser.add_argument("--capture-geometry", default=None)
@@ -60,7 +66,7 @@ def main():
         log_file = open(args.log_path, "w")
 
     env = MHWEnv(
-        weapon_config_path=args.weapon,
+        tools_config_path=args.tools,
         monster_config_path=args.monster,
         state_path=args.state_path,
         capture_geometry=args.capture_geometry,
@@ -68,10 +74,14 @@ def main():
         reset_timeout_seconds=args.reset_timeout,
     )
 
-    def policy():
+    idle = env.toolset.call("wait", duration="short")
+
+    def policy(info):
         if args.policy == "idle":
-            return env.action_space.index_of("idle")
-        return random.randrange(env.action_space.n)
+            return idle
+        if args.ignore_mask:
+            return random.randrange(env.toolset.n)
+        return random.choice([i for i, ok in enumerate(info["action_mask"]) if ok])
 
     print(f"Waiting up to {args.reset_timeout:.0f}s for a quest to start — accept one now in-game...")
     try:
@@ -93,14 +103,19 @@ def main():
 
     try:
         for step_count in range(1, args.max_steps + 1):
-            action = policy()
+            action = policy(info)
             _, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
             quest_states_seen.add(info["reward_debug"]["quest_state_raw"])
 
-            line = {"step": step_count, "reward": reward, "terminated": terminated, "truncated": truncated, **info}
+            line = {"step": step_count, "reward": reward, "terminated": terminated, "truncated": truncated,
+                    **{k: v for k, v in info.items() if k != "action_mask"}}
             rd = info["reward_debug"]
-            print(f"[{step_count:4d}] action={info['action_name']:<16s} reward={reward:+.4f} "
+            call = f"{info['tool_name']}({', '.join(f'{k}={v}' for k, v in info['tool_args'].items())})"
+            combo = info["moveset"]
+            print(f"[{step_count:4d}] {call:<50s}{' INVALID' if info['invalid_call'] else ''} "
+                  f"combo={combo['from']}->{combo['to'] or '-'} depth={combo['depth']} "
+                  f"reward={reward:+.4f} "
                   f"monster_hp={rd['monster_hp_fraction']} player_hp={rd['player_hp_fraction']} "
                   f"quest_state={rd['quest_state_raw']} "
                   f"target_id={rd['monster_id']} (of {rd['monster_count']} live)")

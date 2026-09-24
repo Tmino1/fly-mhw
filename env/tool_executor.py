@@ -97,7 +97,8 @@ class ToolExecutor:
         if direction != "none":
             self.sleep(self.timings["stick_settle_seconds"])
 
-    def _rest(self) -> None:
+    def rest(self) -> None:
+        """Release everything and recentre both sticks."""
         for code in list(self._held):
             self.pad.release(code)
         self._held.clear()
@@ -173,7 +174,10 @@ class ToolExecutor:
         else:
             raise ValueError(f"no program for timed tool {call.name!r}")
 
-    def run(self, call: ToolCall) -> ExecResult:
+    def run(self, call: ToolCall, option: Optional[Option] = None) -> ExecResult:
+        """Run call. `option` pins which route to use when several reach
+        the same move (a graph-relative action picks one explicitly); it
+        must be one of the tracker's current options for this move."""
         call = self.toolset.validate_call(call)
         t_start = self.clock()
 
@@ -181,17 +185,19 @@ class ToolExecutor:
             try:
                 self._run_timed(call)
             finally:
-                self._rest()
+                self.rest()
             return ExecResult(call, False, None, None, t_start, self.clock())
 
         options = self.tracker.move_options(call.name, call.arg_dict, t_start)
+        if option is not None and option not in options:
+            options = []
         if not options:
             return ExecResult(call, True, None, None, t_start, self.clock())
 
-        option = options[0]
+        option = option or options[0]
         try:
             t_commit = self._send_input(option.input, option.finish, call.arg_dict)
         finally:
-            self._rest()
+            self.rest()
         transition = self.tracker.advance(option, t_start, t_commit)
         return ExecResult(call, False, option, transition, t_start, self.clock())
