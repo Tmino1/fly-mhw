@@ -83,8 +83,9 @@ def _resolve_repo_path(path: str | Path) -> Path:
 
 
 class ToolSet:
-    def __init__(self, data: dict[str, Any], graph: MovesetGraph):
+    def __init__(self, data: dict[str, Any], graph: MovesetGraph, moveset_path: Optional[Path] = None):
         self.name: str = data["name"]
+        self.moveset_path = moveset_path
         self.weapon_type_id: int = data["weapon_type_id"]
         self.gamepad: dict[str, Any] = data["gamepad"]
         self.directions: dict[str, list[int]] = data["directions"]
@@ -120,8 +121,8 @@ class ToolSet:
     @classmethod
     def from_config(cls, path: str | Path, moveset_path: Optional[str | Path] = None) -> "ToolSet":
         data = load_config(path, TOOLS_SCHEMA)
-        graph = MovesetGraph.from_config(_resolve_repo_path(moveset_path or data["moveset"]))
-        return cls(data, graph)
+        resolved = _resolve_repo_path(moveset_path or data["moveset"])
+        return cls(data, MovesetGraph.from_config(resolved), resolved)
 
     def _validate(self) -> None:
         graph_moves = set(self.graph.moves())

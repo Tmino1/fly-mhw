@@ -291,6 +291,8 @@ class Transition:
     relative_label: Optional[int]
     available: list[str] = field(default_factory=list)
     unresolved: bool = False
+    path_before: list[str] = field(default_factory=list)  # combo path before this input
+    starts_chain: bool = False  # first move of a new combo chain (see advance())
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -306,6 +308,8 @@ class Transition:
             "relative_label": self.relative_label,
             "available": self.available,
             "unresolved": self.unresolved,
+            "path_before": self.path_before,
+            "starts_chain": self.starts_chain,
         }
 
 
@@ -342,15 +346,15 @@ class MovesetTracker:
         return {o.move for o in self.options(t)}
 
     def snapshot(self, t: float) -> dict[str, Any]:
+        """The combo state at t without advancing — the `graph` block for
+        timed tools (move/wait/camera), same keys as Transition.to_dict()."""
         root, expired = self.root_at(t)
         path = self.path if root == self.current else [root]
-        return {
-            "root": root,
-            "expired": expired,
-            "depth": len(path) - 1,
-            "path_from_root": list(path),
-            "available": [o.describe() for o in self.graph.options_at(root)],
-        }
+        return Transition(
+            t=t, root_before=root, expired=expired, to=None, move=None, via=None, edge_ids=[],
+            rerooted=False, depth=len(path) - 1, path_from_root=list(path), relative_label=None,
+            available=[o.describe() for o in self.graph.options_at(root)], path_before=list(path),
+        ).to_dict()
 
     # --- advancing --------------------------------------------------------
 
@@ -374,7 +378,8 @@ class MovesetTracker:
         if option is None:
             self.current, self.committed_at, self.path = self.graph.root, t_commit, [self.graph.root]
             return Transition(t_input, root, expired, None, None, None, [], False,
-                              0, [self.graph.root], None, available, unresolved=True)
+                              0, [self.graph.root], None, available, unresolved=True,
+                              path_before=list(base_path), starts_chain=True)
 
         relative = options.index(option) if option in options else None
         target = self.graph.nodes[option.to]
@@ -390,7 +395,12 @@ class MovesetTracker:
             t=t_input, root_before=root, expired=expired, to=target.id, move=option.move,
             via=option.via, edge_ids=option.edge_ids, rerooted=option.rerooted,
             depth=len(path) - 1, path_from_root=list(path), relative_label=relative,
-            available=available,
+            available=available, path_before=list(base_path),
+            # A chain starts from neutral (fresh, expired or returned-to), on
+            # a re-root, or when landing on a chain root like dodge_out —
+            # but NOT on the move right after dodge_out (Y after dodge ->
+            # Tackle continues the dodge's chain).
+            starts_chain=option.rerooted or target.kind == "root" or base_path == [self.graph.root],
         )
 
     def advance_input(self, input: str, finish: Optional[str], t_input: float,

@@ -1,85 +1,57 @@
 """
-Offline fixture suite for demos/keyboard_bindings.py — no running game,
-no real input device needed (KeyboardActionReducer.sample() takes an
-active_codes override for exactly this purpose).
+Offline checks for demos/keyboard_bindings.py (v2: keys -> input roles).
+No evdev or input device needed — only config loading is exercised; the
+event-to-tool-call logic that used to live here (v1's
+KeyboardActionReducer) is now demos/tool_segmenter.py, covered by
+tests/test_tool_segmenter.py.
 
     python tests/test_keyboard_bindings.py
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from evdev import ecodes  # noqa: E402
+from demos.keyboard_bindings import ROLES, KeyboardBindings  # noqa: E402
 
-from demos.keyboard_bindings import KeyBinding, KeyboardActionReducer, KeyboardBindings  # noqa: E402
-
-bindings = KeyboardBindings(
-    weapon_config="configs/weapons/greatsword.yaml",
-    bindings=(
-        KeyBinding("move_forward", "KEY_W"),
-        KeyBinding("move_backward", "KEY_S"),
-        KeyBinding("strafe_left", "KEY_A"),
-        KeyBinding("strafe_right", "KEY_D"),
-        KeyBinding("attack_1", "BTN_LEFT"),
-        KeyBinding("attack_2", "BTN_RIGHT"),
-        KeyBinding("dodge", "KEY_SPACE"),
-    ),
-)
-reducer = KeyboardActionReducer(bindings, devices=[])
+failures = 0
 
 
-def code(name: str) -> int:
-    return ecodes.ecodes[name]
-
-
-def check(label, sample, expect_action, expect_collided=None):
-    ok = sample.action_name == expect_action
-    if expect_collided is not None:
-        ok = ok and sample.collided == expect_collided
-    status = "OK" if ok else "FAIL"
-    print(f"[{status}] {label}: action={sample.action_name!r} collided={sample.collided} "
-          f"candidates={sample.candidate_actions}")
+def check(label, ok, detail=""):
+    global failures
+    print(f"[{'OK' if ok else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
     if not ok:
-        print(f"        expected action={expect_action!r} collided={expect_collided}")
+        failures += 1
 
 
-# 1. Nothing held -> idle, no candidates, no collision
-check("nothing held", reducer.sample(active_codes=set()), "idle")
+b = KeyboardBindings.from_config(REPO / "configs/keyboard_bindings.yaml")
+check("loads the repo's bindings", b.roles["y"] == "BTN_LEFT" and b.roles["x"] == "KEY_E", str(b.roles))
+check("every role present", set(b.roles) == set(ROLES))
+check("uncalibrated roles reported", {"rt", "rb", "lt"} <= set(b.unbound_roles()), str(b.unbound_roles()))
+check("tools config reference", b.tools_config == "configs/weapons/greatsword_tools.yaml")
+check("mouse thresholds", b.mouse.get("counts_small") and b.mouse.get("counts_large"))
 
-# 2. A single bound key -> that action, no collision
-check("forward only", reducer.sample(active_codes={code("KEY_W")}), "move_forward", False)
 
-# 3. An unbound key (e.g. some other key on the keyboard) -> idle
-check("unbound key", reducer.sample(active_codes={code("KEY_TAB")}), "idle", False)
+def load(text):
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        f.write(text)
+    return KeyboardBindings.from_config(f.name)
 
-# 4. Movement + attack held together -> attack wins (ACTION_PRIORITY)
-check(
-    "forward + attack_1",
-    reducer.sample(active_codes={code("KEY_W"), code("BTN_LEFT")}),
-    "attack_1", True,
-)
 
-# 5. Two movement keys held together (diagonal) -> declared-priority winner, flagged as a collision
-check(
-    "forward + strafe_left (diagonal)",
-    reducer.sample(active_codes={code("KEY_W"), code("KEY_A")}),
-    "move_forward", True,
-)
+header = 'schema: "fly-mhw/keyboard_bindings/v2"\ntools_config: "x"\n'
+for text, label in [
+    (header + "roles: {y: BTN_LEFT, b: BTN_LEFT}\n", "same key on two roles"),
+    (header + "roles: {attack_1: BTN_LEFT}\n", "unknown role"),
+    ('schema: "fly-mhw/keyboard_bindings/v1"\nweapon_config: "x"\nbindings: []\n', "v1 file"),
+]:
+    try:
+        load(text)
+        check(f"rejects {label}", False)
+    except ValueError:
+        check(f"rejects {label}", True)
 
-# 6. dodge beats movement but loses to attack_1 (ACTION_PRIORITY order:
-#    attack_1, attack_2, dodge, then movement)
-check(
-    "attack_1 + dodge",
-    reducer.sample(active_codes={code("BTN_LEFT"), code("KEY_SPACE")}),
-    "attack_1", True,
-)
-check(
-    "dodge + forward",
-    reducer.sample(active_codes={code("KEY_SPACE"), code("KEY_W")}),
-    "dodge", True,
-)
-
-print("\nAll checks ran without raising.")
+print(f"\n{failures} failure(s).")
+sys.exit(1 if failures else 0)

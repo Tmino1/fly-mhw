@@ -1,33 +1,41 @@
-schema: "fly-mhw/keyboard_bindings/v1"
-weapon_config: "configs/weapons/greatsword.yaml"
+schema: "fly-mhw/keyboard_bindings/v2"
+tools_config: "configs/weapons/greatsword_tools.yaml"
 device_name_patterns: ['keychron', 'logitech']
 calibrated_at: "2026-09-19T00:00:00+00:00"
 notes: >
-  idle is intentionally not bound -- it is the reducer's fallback when
-  no other listed action's key/button is currently held. See
-  demos/keyboard_bindings.py's ACTION_PRIORITY for the multi-key
-  reduction rule used when more than one bound key is held at once.
+  v2 binds physical keys to input ROLES (the gamepad button vocabulary),
+  not to action names — demos/tool_segmenter.py groups the timestamped
+  events into tool calls, and the moveset graph decides which move each
+  one was. See demos/keyboard_bindings.py.
 
-  Written directly from the user's own reported bindings in chat
-  (2026-09-19), not captured via scripts/calibrate_keyboard_bindings.py's
-  interactive live-event capture -- the key names below (KEY_W/S/A/D,
-  KEY_SPACE, BTN_LEFT, BTN_RIGHT) are all standard/unambiguous evdev
-  codes, but this file hasn't been independently verified against real
-  event codes the way the interactive tool would. If actions come back
-  wrong during recording, re-run the calibration script for real
-  live-captured codes instead of hand-edited ones.
-bindings:
-  - action: move_forward
-    key: KEY_W
-  - action: move_backward
-    key: KEY_S
-  - action: strafe_left
-    key: KEY_A
-  - action: strafe_right
-    key: KEY_D
-  - action: attack_1
-    key: BTN_LEFT
-  - action: attack_2
-    key: BTN_RIGHT
-  - action: dodge
-    key: KEY_SPACE
+  move_*, y, b, a: carried over from the v1 file, which was written from
+  the user's own reported bindings in chat (2026-09-19), not captured via
+  scripts/calibrate_keyboard_bindings.py. x: KEY_E comes from the Iceborne
+  moveset chart's Mouse & Keyboard column (E = Sheathe) — the chart's
+  default, not confirmed as the user's own binding. rt (guard / side
+  blow / kick), rb (sprint) and lt (slinger) are UNCALIBRATED: until
+  they're bound, guard/kick/RT side blows can't be recorded, and
+  sprint/slinger use can't be flagged. Re-run the calibration script to
+  fill them in (and to replace hand-edited codes with live-captured ones).
+
+  mouse.counts_*: placeholder thresholds — summed mouse REL_X counts per
+  camera window (configs/weapons/greatsword_tools.yaml's
+  segmenter.camera_window_seconds) for a small/large camera call. They
+  depend on mouse DPI and in-game sensitivity; the calibration script's
+  mouse-sweep step measures them.
+roles:
+  move_forward: KEY_W
+  move_back: KEY_S
+  move_left: KEY_A
+  move_right: KEY_D
+  y: BTN_LEFT
+  b: BTN_RIGHT
+  a: KEY_SPACE
+  x: KEY_E
+  rt: null
+  rb: null
+  lt: null
+mouse:
+  counts_small: 60
+  counts_large: 400
+  calibrated: false

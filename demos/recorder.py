@@ -1,10 +1,17 @@
 """
-Records a human-played hunt as synchronized (frame, action, state) demo
-data for eventual imitation learning (Phase 3 of the roadmap). This never
-touches a VirtualGamepad or keyboard — you play, this only observes:
-captures a frame, reduces your currently-held keyboard/mouse input to one
-action name (demos/keyboard_bindings.py), reads live game state, and
-writes both to disk.
+Records a human-played hunt as demo data for eventual imitation learning
+(Phase 3 of the roadmap), in the v2 tool-call format. This never touches
+a VirtualGamepad — you play, this only observes:
+  - frames: captured every step_period, with live game state and the
+    reward-debug fields (frames.jsonl + frame_NNNNNN.png),
+  - your input: every keyboard/mouse event with its kernel timestamp
+    (input_events.jsonl, via demos/input_events.InputEventStream) — raw,
+    so it can be re-labelled later (scripts/relabel_demos.py),
+  - the game's own animation id (player lmtID) on every change
+    (lmt_events.jsonl) — offline label auditing only.
+At the end of each episode demos/labeling.py turns the events into
+tool_calls.jsonl: move-named tool calls, each with the moveset-graph
+state it happened in.
 
 Optional exception, off the actual demo-data path: an auto-skip for the
 real post-hunt "return to camp" wait (confirmed live to exist —
@@ -24,7 +31,7 @@ from github.com/Fexty12573/SharpPluginLoader's actual source, not
 guessed) — no SharpPluginLoader install, no input injection, needed at
 all for this. This file is never touched during actual recording, only
 between episodes, and is created/removed here — not visible to
-KeyboardActionReducer, so it can't leak into an action label. The flag
+the input event stream, so it can't leak into a label. The flag
 file only exists while a recording session is actively asking for it,
 so normal untracked play never sees this at all (explicit requirement).
 
@@ -36,10 +43,10 @@ neither is reimplemented here. See docs/architecture.md's Design
 Principles: the reward computed is stored for offline analysis only,
 never shown live or used to steer recording.
 
-One correctness-critical ordering: each tick captures the frame BEFORE
-sampling the action, preserving the same causal (observation_t ->
-action_t) pairing MHWEnv.step() implies (the action recorded is "what you
-did in response to this frame," not "what you did during its capture").
+Causal ordering: every frame records the wall-clock time just before
+its capture; demos/dataset.py pairs each tool call with the latest frame
+captured at or before the call started — the same observation_t ->
+action_t pairing MHWEnv.step() implies.
 """
 
 from __future__ import annotations
@@ -53,8 +60,10 @@ from typing import Any, Optional
 from env.game_interface.capture import GrimCaptureError, capture_frame
 from env.game_interface.lua_bridge import GameState, LuaBridge, StateReadError, quest_id
 from env.reward import RewardModel
+from env.tools import ToolSet
 
-from .keyboard_bindings import KeyboardActionReducer
+from .input_events import InputEventStream
+from .labeling import file_sha256, label_episode
 
 # The confirmed-real (2026-09-19) post-hunt quest.state value seen while
 # quest.id is still non-idle, well after a kill — the "return to camp"
@@ -70,7 +79,7 @@ class EpisodeSummary:
     termination_reason: str
     quest_id: Any
     distinct_quest_states: list = field(default_factory=list)
-    action_counts: dict[str, int] = field(default_factory=dict)
+    labels: dict[str, Any] = field(default_factory=dict)  # demos/labeling.label_episode()'s summary
 
 
 class DemoRecorder:
@@ -78,7 +87,11 @@ class DemoRecorder:
         self,
         reward_model: RewardModel,
         lua_bridge: LuaBridge,
-        reducer: KeyboardActionReducer,
+        events: InputEventStream,
+        toolset: ToolSet,
+        tools_config_path: str | Path,
+        bindings_path: str | Path,
+        mouse_cfg: dict[str, Any],
         capture_geometry: Optional[str],
         step_period_seconds: float,
         output_dir: str | Path,
@@ -87,14 +100,18 @@ class DemoRecorder:
     ):
         self.reward_model = reward_model
         self.lua_bridge = lua_bridge
-        self.reducer = reducer
+        self.events = events
+        self.toolset = toolset
+        self.tools_config_path = Path(tools_config_path)
+        self.bindings_path = Path(bindings_path)
+        self.mouse_cfg = mouse_cfg
         self.capture_geometry = capture_geometry
         self.reset_timeout_seconds = reset_timeout_seconds
         self.step_period_seconds = step_period_seconds
         self.output_dir = Path(output_dir)
         # See module docstring: only used to auto-skip the post-hunt
         # "return to camp" wait, never during actual recording, never
-        # visible to KeyboardActionReducer. Must match
+        # visible to the input event stream. Must match
         # lua_scripts/state_reader.lua's SKIP_QUEST_END_FLAG_PATH once
         # resolved to an absolute path (that script writes relative to
         # the game's own working directory — see docs/modding_setup.md
@@ -178,23 +195,35 @@ class DemoRecorder:
         episode_dir = self.output_dir / episode_id
         episode_dir.mkdir(parents=True, exist_ok=True)
 
+        self.events.take()  # drop anything from between hunts
         started_at = time.time()
         prev_state: Optional[GameState] = start_state
         step = 0
         termination_reason = ""
         distinct_quest_states: list = []
-        action_counts: dict[str, int] = {}
 
-        jsonl_path = episode_dir / "episode.jsonl"
-        with jsonl_path.open("w") as jsonl_f:
+        with (episode_dir / "frames.jsonl").open("w") as frames_f, \
+                (episode_dir / "input_events.jsonl").open("w") as events_f, \
+                (episode_dir / "lmt_events.jsonl").open("w") as lmt_f:
+
+            def flush_events():
+                keys, mouse, lmt = self.events.take()
+                for k in keys:
+                    events_f.write(json.dumps({"type": "key", "t": k.t, "role": k.role, "down": k.down}) + "\n")
+                for m in mouse:
+                    events_f.write(json.dumps({"type": "mouse", "t": m.t, "dx": m.dx, "dy": m.dy}) + "\n")
+                for rec in lmt:
+                    lmt_f.write(json.dumps(rec) + "\n")
+                events_f.flush()
+                lmt_f.flush()
+
             while True:
+                t_frame = time.time()
                 try:
                     capture = capture_frame(geometry=self.capture_geometry)
                 except GrimCaptureError as exc:
                     termination_reason = f"capture_error: {exc}"
                     break
-
-                sample = self.reducer.sample()
 
                 try:
                     curr_state = self.lua_bridge.read()
@@ -216,23 +245,21 @@ class DemoRecorder:
 
                 outcome = self.reward_model.step(prev_state, curr_state, step)
 
-                frame_path = episode_dir / f"frame_{step:06d}.png"
-                capture.image.save(frame_path)
+                frame_name = f"frame_{step:06d}.png"
+                capture.image.save(episode_dir / frame_name)
 
                 if outcome.quest_state_raw not in distinct_quest_states:
                     distinct_quest_states.append(outcome.quest_state_raw)
-                action_counts[sample.action_name] = action_counts.get(sample.action_name, 0) + 1
 
-                jsonl_f.write(json.dumps({
+                player = curr_state.raw.get("player")
+                action = player.get("action") if isinstance(player, dict) else None
+                frames_f.write(json.dumps({
                     "step": step,
-                    "wall_clock": time.time(),
+                    "t": t_frame,
+                    "frame": frame_name,
                     "capture_latency_seconds": capture.latency_seconds,
-                    "action_name": sample.action_name,
-                    "held_input_names": sample.held_key_names,
-                    "action_collision": sample.candidate_actions if sample.collided else None,
                     "state_age_seconds": curr_state.file_age_seconds,
                     "quest_id": quest_id(curr_state),
-                    "episode_step": step,
                     "termination_reason": outcome.reason,
                     # Same reward_debug shape MHWEnv._build_info() uses —
                     # offline-analysis-only, never fed back into anything
@@ -244,9 +271,11 @@ class DemoRecorder:
                         "player_hp_fraction": outcome.player_hp_fraction,
                         "monster_id": outcome.monster_id,
                         "monster_count": outcome.monster_count,
+                        "player_action": action,
                     },
                 }) + "\n")
-                jsonl_f.flush()
+                frames_f.flush()
+                flush_events()
 
                 prev_state = curr_state
                 step += 1
@@ -257,7 +286,10 @@ class DemoRecorder:
 
                 time.sleep(self.step_period_seconds)
 
+            flush_events()
+
         ended_at = time.time()
+        labels = label_episode(episode_dir, self.toolset, self.mouse_cfg, t_begin=started_at, t_end=ended_at)
         summary = EpisodeSummary(
             episode_id=episode_id,
             frame_count=step,
@@ -265,11 +297,11 @@ class DemoRecorder:
             termination_reason=termination_reason,
             quest_id=qid,
             distinct_quest_states=distinct_quest_states,
-            action_counts=action_counts,
+            labels=labels,
         )
 
         meta = {
-            "schema": "fly-mhw/demo_episode/v1",
+            "schema": "fly-mhw/demo_episode/v2",
             "episode_id": episode_id,
             "started_at": started_at,
             "ended_at": ended_at,
@@ -277,9 +309,18 @@ class DemoRecorder:
             "termination_reason": summary.termination_reason,
             "quest_id": summary.quest_id,
             "distinct_quest_states_seen": summary.distinct_quest_states,
-            "action_counts": summary.action_counts,
             "step_period_seconds": self.step_period_seconds,
             "capture_geometry": self.capture_geometry,
+            # Which tool space / moveset graph / bindings these labels were
+            # made against — scripts/relabel_demos.py rewrites the labels
+            # (and these) if any of them change later.
+            "tools_config": str(self.tools_config_path),
+            "tools_config_sha256": file_sha256(self.tools_config_path),
+            "moveset_config": str(self.toolset.moveset_path),
+            "moveset_config_sha256": file_sha256(self.toolset.moveset_path),
+            "keyboard_bindings": str(self.bindings_path),
+            "keyboard_bindings_sha256": file_sha256(self.bindings_path),
+            "labels": labels,
         }
         (episode_dir / "episode_meta.json").write_text(json.dumps(meta, indent=2))
 
