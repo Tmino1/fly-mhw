@@ -1,0 +1,177 @@
+# Great Sword moveset graph (MHW + Iceborne), v1.
+#
+# SOURCE: transcribed from the "MH World + Iceborne — Great Sword Moveset
+# Diagram" flowchart (revision requests: /u/Famas_1234, @DWiselight;
+# references: Kiranico, Fextralife, bit.ly/MHWIWeaponAttackTables),
+# provided by the user 2026-09-24. Motion values are the chart's.
+#
+# NOTHING HERE IS VERIFIED LIVE YET. Every edge is `verified: false`;
+# timings are placeholders. scripts/audit_tool_labels.py checks the graph
+# against the game's own animation ids (player lmtID) in recorded demos —
+# see docs/architecture.md's "Tool-based action space + moveset graph".
+#
+# How this is read (env/moveset_graph.py):
+#   - The combo ROOT is the latest move. An input is resolved against the
+#     root's own edges first, then its `continues_as` node's edges, then
+#     the global `any` edges, then — only if none of those claim that
+#     input — against `neutral` (a "re-root": a fresh chain).
+#   - `kind: charge` nodes are the held-Y states (the chart's Charge 1/2/3
+#     boxes). A single `y_hold(level, finish)` input walks
+#     root -> charge_k -> (release | tackle) in one step; the charge node
+#     is recorded as `via`, never as a root.
+#   - A root expires back to `neutral` once `duration_s + combo_window_s`
+#     has passed since the move committed. Non-attack tools
+#     (move/wait/camera) never touch the root — only that timeout does
+#     (user decision, 2026-09-24).
+#   - `kind: root` nodes (neutral, dodge_out, sheathed) start a new chain:
+#     depth resets to 0 there.
+#   - `candidates:` are edges the user could NOT confirm from the chart.
+#     The tracker ignores them; the audit script checks each one against
+#     expert-demo lmtID transitions so they can be promoted (moved into
+#     `edges:`) or dropped.
+#
+# Input kinds (see configs/weapons/greatsword_tools.yaml's `inputs:` for
+# what each one sends on the gamepad / how it's recognised on keyboard):
+#   y_tap, y_hold, b, yb, rt_hold, rt_y, a, x
+# and, on edges leaving a charge node only: release, tackle.
+schema: "fly-mhw/moveset_graph/v1"
+name: "Great Sword (MHW + Iceborne)"
+source: "iceborne_flowchart"
+root: neutral
+
+defaults:
+  duration_s: 1.5       # placeholder — real per-move lengths come from the audit
+  combo_window_s: 1.0   # placeholder
+
+nodes:
+  # --- chain roots -----------------------------------------------------
+  - {id: neutral, kind: root}
+  - {id: dodge_out, kind: root, move: dodge, duration_s: 0.6, combo_window_s: 0.8,
+     notes: "Chart: 'While attacking, dodging always available' -> Dodge out."}
+  - {id: sheathed, kind: root, move: sheathe, continues_as: neutral,
+     notes: "Not on the chart. Treated like neutral for follow-ups (a Y from sheathed is a draw attack)."}
+
+  # --- held-charge states (never roots) --------------------------------
+  - {id: charge_1, kind: charge, notes: "Chart: 'Y (can move)' -> Charge 1."}
+  - {id: charge_2, kind: charge, notes: "Chart: 'Y move' -> Charge 2."}
+  - {id: charge_3, kind: charge, notes: "Chart: 'Charge 3 (if from SCS: skip Lv1)'."}
+
+  # --- moves (each `move` is a tool name in greatsword_tools.yaml) ------
+  - {id: overhead_smash, move: overhead_smash, motion_values: [48]}
+  - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120}}
+  - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131}}
+  - {id: true_charged_slash, move: true_charged_slash, duration_s: 3.0, returns_to: neutral,
+     motion_values: {lv1: "15+120 / power 144", lv2: "20+175 / power 210", lv3: "22+211 / power 264"},
+     notes: "Chart: -> Neutral. Power version triggers when hit on a weak spot."}
+  - {id: tackle_1, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
+     notes: "Chart top-left Tackle: 'Y+B (during Charge 1) or Y after dodge'. MV depends on charge level."}
+  - {id: tackle_2, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
+     notes: "Chart: Y+B during Charge 2."}
+  - {id: tackle_b, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
+     notes: "Chart: 'B / Y from kick' Tackle (after Wide Slash or Kick)."}
+  - {id: side_blow_1, move: side_blow_1, duration_s: 0.8, motion_values: [16],
+     notes: "Two boxes on the chart (Y after Charged Slash; RT+Y after the charge-1 Tackle) — one node, same move."}
+  - {id: side_blow_2, move: side_blow_2, duration_s: 0.8, motion_values: [18], continues_as: wide_slash,
+     notes: "Chart: loop-return to the 'Wide Slash' circle — continue as if after Wide Slash (meaning confirmed by the user)."}
+  - {id: rising_slash, move: rising_slash, motion_values: [38]}
+  - {id: rising_slash_1, move: rising_slash_1, motion_values: [38]}
+  - {id: rising_slash_2, move: rising_slash_2, motion_values: [41], continues_as: wide_slash,
+     notes: "Chart: loop-return to the 'Wide Slash' circle."}
+  - {id: wide_slash, move: wide_slash, motion_values: {base: 26, from_scs_lv2: 29}}
+  - {id: strong_wide_slash, move: strong_wide_slash, continues_as: wide_slash,
+     motion_values: {lv1: 59, lv2: 66, lv3: 78},
+     notes: "MV depends on the preceding SCS level. Chart: loop-return to the 'Wide Slash' circle."}
+  - {id: jumping_wide_slash, move: jumping_wide_slash, motion_values: {lv1: 75, lv2: 96, lv3: 118}}
+  - {id: guard, move: guard, duration_s: 0.0}
+  - {id: kick, move: kick, duration_s: 0.6, motion_values: [5]}
+
+  # --- on the chart, but not reachable by any v1 tool ------------------
+  # Environment-dependent (slopes/ledges) or deliberately excluded
+  # (slinger). Present so the graph is complete and demos that hit them
+  # can be flagged `unrepresentable` instead of mislabelled.
+  - {id: sprint, move: sprint, reachable: false, notes: "RB — sheathes weapon."}
+  - {id: slide, move: slide, reachable: false, notes: "RB on a slope."}
+  - {id: charged_rising_slash, move: charged_rising_slash, reachable: false,
+     motion_values: {lv1: 48, lv2: 72, lv3: 98}, notes: "RB+Y on a slope."}
+  - {id: plunging_thrust, move: plunging_thrust, reachable: false,
+     motion_values: {lv1: "16 each", lv2: "22 each", lv3: "27 each"}, notes: "Y while aerial after CRS."}
+  - {id: midair_charged_slash, move: midair_charged_slash, reachable: false,
+     motion_values: {lv1: 58, lv2: 69, lv3: 87}, notes: "Y while aerial."}
+  - {id: slinger_burst, move: slinger_burst, reachable: false,
+     notes: "LT + slinger on underlined moves. Out of scope (see docs/architecture.md)."}
+
+# `args` on an edge pins tool args the input itself can't carry — e.g. a
+# Tackle reached without any charge is always level lv1.
+edges:
+  # From neutral
+  - {from: neutral, input: y_tap, to: overhead_smash, source: chart}
+  - {from: neutral, input: y_hold, to: charge_1, source: chart}
+  - {from: neutral, input: yb, to: rising_slash, source: chart}
+  - {from: neutral, input: b, to: wide_slash, source: chart}
+  - {from: neutral, input: rt_hold, to: guard, source: chart}
+  - {from: neutral, input: rt_y, to: kick, source: chart,
+     notes: "Chart: Guard (RT) -> RT+Y Kick; from neutral, holding RT then Y does both."}
+
+  # Charge 1
+  - {from: charge_1, input: release, to: charged_slash, source: chart}
+  - {from: charge_1, input: tackle, to: tackle_1, source: chart}
+
+  # Dodge out
+  - {from: dodge_out, input: y_tap, to: tackle_1, args: {level: lv1}, source: chart,
+     notes: "Chart: 'Y after dodge' -> Tackle."}
+  - {from: dodge_out, input: b, to: wide_slash, source: chart}
+
+  # Charge 1 finishers and their follow-ups
+  - {from: overhead_smash, input: y_hold, to: charge_2, source: chart}
+  - {from: charged_slash, input: y_tap, to: side_blow_1, source: chart}
+  - {from: charged_slash, input: yb, to: rising_slash_1, source: chart}
+  - {from: charged_slash, input: y_hold, to: charge_2, source: chart}
+  - {from: tackle_1, input: rt_y, to: side_blow_1, source: chart}
+  - {from: tackle_1, input: y_hold, to: charge_2, source: chart,
+     notes: "Tackle skips a charge tier."}
+  - {from: side_blow_1, input: y_hold, to: charge_2, source: user,
+     notes: "Tentative — user: 'not totally sure, will have to audit edge with expert demonstrations'."}
+
+  # Charge 2
+  - {from: charge_2, input: release, to: strong_charged_slash, source: chart}
+  - {from: charge_2, input: tackle, to: tackle_2, source: chart}
+
+  # Strong Charged Slash follow-ups
+  - {from: strong_charged_slash, input: y_tap, to: side_blow_2, source: chart}
+  - {from: strong_charged_slash, input: b, to: strong_wide_slash, source: chart}
+  - {from: strong_charged_slash, input: yb, to: rising_slash_2, source: chart}
+  - {from: strong_charged_slash, input: y_hold, to: charge_3, source: chart}
+  - {from: tackle_2, input: rt_y, to: side_blow_2, source: chart}
+  - {from: tackle_2, input: y_hold, to: charge_3, source: chart,
+     notes: "Chart combo list: 'attack-tackle loop (until TCS)'."}
+
+  # Charge 3
+  - {from: charge_3, input: release, to: true_charged_slash, source: chart}
+
+  # Guard / kick / wide-slash branch
+  - {from: guard, input: rt_y, to: kick, source: chart}
+  - {from: kick, input: y_tap, to: tackle_b, args: {level: lv1}, source: chart,
+     notes: "Chart: 'Y from kick'."}
+  - {from: wide_slash, input: b, to: tackle_b, args: {level: lv1}, source: chart}
+  - {from: wide_slash, input: yb, to: rising_slash, source: chart, notes: "The chart's blue arrow."}
+  - {from: tackle_b, input: b, to: jumping_wide_slash, source: chart}
+
+# Available from every node (the chart's "dodging always available", plus
+# sheathe). They claim their input everywhere, so they never re-root.
+any:
+  - {input: a, to: dodge_out, source: chart}
+  - {input: x, to: sheathed, source: chart, notes: "Chart button table: X / E = Sheathe."}
+
+# Unconfirmed — ignored by the tracker, checked by
+# scripts/audit_tool_labels.py against expert demonstrations.
+candidates:
+  - {from: rising_slash_1, input: y_hold, to: charge_2}
+  - {from: wide_slash, input: y_hold, to: charge_2}
+  - {from: jumping_wide_slash, input: y_hold, to: charge_2}
+  - {from: side_blow_2, input: y_hold, to: charge_3}
+  - {from: rising_slash_2, input: y_hold, to: charge_3}
+  - {from: jumping_wide_slash, input: yb, to: rising_slash_1}
+  - {from: rising_slash, input: y_tap, to: overhead_smash}
+  - {from: rising_slash, input: y_hold, to: charge_1}
+  - {from: side_blow_1, continues_as: wide_slash,
+     notes: "The chart's top row appears to route Side Blow 1 to the 'Wide Slash' loop-return circle too."}
