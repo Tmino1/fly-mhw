@@ -23,6 +23,14 @@
 local OUTPUT_PATH = "fly_mhw_state.json"
 local WRITE_INTERVAL_SECONDS = 1
 local SKIP_QUEST_END_FLAG_PATH = "fly_mhw_skip_quest_end.flag"
+-- Player action-change log (tool-based action space, 2026-09-24): while
+-- ACTION_LOG_FLAG_PATH exists, every change of the player's animation id
+-- (Player.Action.lmtID) is appended to ACTION_LOG_PATH as one JSON line.
+-- scripts/record_hunt.py creates the flag for the length of a recording
+-- session only; the log is used offline to audit demo labels against
+-- what the game actually played (scripts/audit_tool_labels.py).
+local ACTION_LOG_FLAG_PATH = "fly_mhw_action_log.flag"
+local ACTION_LOG_PATH = "fly_mhw_actions.jsonl"
 
 -- Minimal JSON encoder for the specific shapes this script produces
 -- (nested tables of strings/numbers/booleans/arrays). Not general-purpose
@@ -89,6 +97,16 @@ local function snapshot_player()
     }
   end)
   if ok then
+    -- Separate pcall: Action's field shapes are documented
+    -- (docs/modding_setup.md) but never read live yet, so a surprise here
+    -- must not take the rest of the player snapshot down with it.
+    local action_ok, action = pcall(function()
+      return {
+        lmt_id = Data_Player.Action.lmtID,
+        fsm = Data_Player.Action.fsm,
+      }
+    end)
+    result.action = action_ok and action or { error = tostring(action) }
     return result
   else
     return { error = tostring(result) }
@@ -235,6 +253,42 @@ local function maybe_skip_quest_end_timer(quest_state)
   end
 end
 
+-- Only the flag's EXISTENCE is checked, and only once a second (from the
+-- snapshot write below) — not every tick, to keep per-frame file I/O to
+-- the actual lmtID changes.
+local action_log_enabled = false
+local last_lmt_id = nil
+local tick = 0
+
+local function refresh_action_log_flag()
+  local flag = io.open(ACTION_LOG_FLAG_PATH, "r")
+  if flag then
+    flag:close()
+    action_log_enabled = true
+  else
+    action_log_enabled = false
+    last_lmt_id = nil
+  end
+end
+
+local function maybe_log_action()
+  if not action_log_enabled then
+    return
+  end
+  local ok, lmt_id, fsm = pcall(function()
+    return Data_Player.Action.lmtID, Data_Player.Action.fsm
+  end)
+  if not ok or lmt_id == last_lmt_id then
+    return
+  end
+  last_lmt_id = lmt_id
+  local f = io.open(ACTION_LOG_PATH, "a")
+  if f then
+    f:write(json_encode({ lmt_id = lmt_id, fsm = fsm, t = os.time(), tick = tick }) .. "\n")
+    f:close()
+  end
+end
+
 local last_write_time = 0
 
 function on_init()
@@ -257,12 +311,15 @@ end
 -- they're visible in-game instead of silently stopping the hook.
 function on_time()
   local ok, err = pcall(function()
+    tick = tick + 1
     maybe_skip_quest_end_timer(Data_Quest.State)
+    maybe_log_action()
 
     local now = os.time()
     if now - last_write_time >= WRITE_INTERVAL_SECONDS then
       last_write_time = now
       write_snapshot()
+      refresh_action_log_flag()
     end
   end)
   if not ok then
