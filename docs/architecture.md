@@ -58,11 +58,47 @@ this repo self-contained (plus one new principle Phase 1 added):
 | Concern | Decision | Why |
 |---|---|---|
 | Recording your real (keyboard + mouse) input | Calibrate, never guess: `scripts/calibrate_keyboard_bindings.py` watches real key/button-down events while you press your actual in-game keys, writes `configs/keyboard_bindings.yaml` | MHW's `config.ini` has no keyboard-binding section, so real bindings are unknowable from config alone. A passive (non-`.grab()`'d) `evdev.InputDevice` open reads keyboard *and* mouse device events without interfering with normal use — confirmed live. |
-| Multiple keys held at once → one action per tick | `demos/keyboard_bindings.py`'s `ACTION_PRIORITY`: `attack_1, attack_2, dodge` win over the four movement actions | Real play routinely holds movement while attacking (e.g. a forward lunge); the discrete action space has no compound action for that, so a precedence rule is needed. Collisions are logged, not silently dropped — a diagnostic for the open "how much data is enough" question. |
+| Multiple keys held at once → one action per tick | **Superseded 2026-09-24** by the tool-based action space below (events, not held-key polling). Was: `demos/keyboard_bindings.py`'s `ACTION_PRIORITY`: `attack_1, attack_2, dodge` win over the four movement actions | Real play routinely holds movement while attacking (e.g. a forward lunge); the discrete action space has no compound action for that, so a precedence rule is needed. Collisions are logged, not silently dropped — a diagnostic for the open "how much data is enough" question. |
 | Demo storage format | Per-frame PNG (`Pillow`, already a dependency) + a JSONL sidecar per episode — no video-encoding dependency | Zero new Python deps for a first pass; `wf-recorder` (already in `flake.nix`'s devShell) stays available as an escape hatch if storage/IO ever becomes the bottleneck. |
 | Episode-boundary reuse | `demos/recorder.py` imports `env/reward.py`'s `RewardModel` directly (fully standalone, no `MHWEnv`/gamepad dependency) and the promoted `quest_id()` helper (moved from `mhw_env.py`'s private `_quest_id` into `env/game_interface/lua_bridge.py`) | Confirmed both were already decoupled enough to reuse as-is — avoided reimplementing episode-boundary logic a second time. |
 | Recording session shape | `scripts/record_hunt.py` runs as a long-lived session, not one hunt per invocation — after each episode ends it automatically goes back to waiting for the next quest-accept, looping until Ctrl+C or `--max-episodes` | Launching the recorder fresh and timing it against each individual quest-accept proved impractical live — coordinating "start the recorder, then accept within N seconds" for every single hunt doesn't scale to recording dozens of them. `--reset-timeout` (10 min default) covers the between-hunts gap (restocking, traveling), not just one hunt's worth of patience. |
 | Auto-skip the post-hunt "return to camp" wait | A direct memory write from `lua_scripts/state_reader.lua`, gated on a flag file `DemoRecorder` creates/removes (`fly_mhw_skip_quest_end.flag`, next to `fly_mhw_state.json`) — no input injection, no SharpPluginLoader dependency, at all | Two earlier approaches failed first: a `BTN_SOUTH` gamepad tap did nothing (confirmed live — turned out to be a keyboard/mouse-driven UI, not a gamepad one, from a screenshot showing a "Tab" key icon), and UI automation (SharpPluginLoader's F9 menu, click a button) would have needed a new absolute-position pointer-click mechanism and been fragile to layout changes. The actual fix replicates SharpPluginLoader's own open-source "Quest End Skip" example plugin's technique — `Quest.QuestEndTimer.SetToEnd()` is just `Timer.Time = Timer.MaxTime` (read directly from `github.com/Fexty12573/SharpPluginLoader`'s `Quest.cs`/`Timer.cs`, not guessed) — as a raw memory write at the same `sQuest` singleton our own Lua already resolves (confirmed: SPL's own source lists `CurrentQuestId`/`QuestState` at the exact same `+0x4C`/`+0x54` offsets `Engine_quest.lua` already uses). The flag file only exists while a recording session is actively requesting it, so normal untracked play never sees this at all (explicit requirement). |
+
+## Tool-based action space + moveset graph (2026-09-24, branch `tool-action-space`)
+
+Replaces the Phase 1 8-action space and the Phase 3 key-state reducer.
+**Nothing here is verified live yet** — built offline, covered by
+`tests/`, with live checks listed at the end of this section. The legacy
+files (`env/action_space.py`, `configs/weapons/greatsword.yaml`,
+`scripts/verify_action_mapping.py`) stay for v1 demos.
+
+**Why:** the old representation misstated what happened in the game.
+Polling held keys every 0.2s dropped short taps and hold durations (a
+charged slash was labelled the same as a tap), collapsed simultaneous
+presses to one "winner", never recorded the mouse (camera), and — most
+importantly — ignored combo context: the same button is a different move
+depending on what came before.
+
+| Concern | Decision | Why |
+|---|---|---|
+| What the brain picks | **Move-named tool calls with small discrete args** (`env/tools.py`, `configs/weapons/greatsword_tools.yaml`): e.g. `strong_charged_slash(direction, level)`, `wide_slash(direction)`, plus always-available `dodge`, `sheathe`, `move`, `wait`, `camera`. Each call runs to completion (a semi-MDP). Flat index *and* factored (tool head + arg heads) views are both exposed. | User decision. Moves, not buttons, are the meaningful unit; discrete args keep the readout small. Which readout Phase 2 uses is left open. |
+| Aim | Chosen by the brain from pixels: a `direction` arg on every attack/dodge, plus a `camera` tool. No target camera, no Lua-driven aiming. | User decision — keeps Design Principle 4. |
+| Combo context | **Moveset graph, re-rooted at the latest move** (`env/moveset_graph.py`, `configs/weapons/greatsword_moveset.yaml`), transcribed from the MHW + Iceborne Great Sword flowchart (/u/Famas_1234, @DWiselight). The tracker resolves an input against the root's own edges → `continues_as` → global edges → neutral (a re-root). Charges are one call, with the Charge 1/2/3 node recorded as `via`. Non-attack tools never move the root; only the combo window expiring does. | User decisions. Lets the model learn the *paths* from neutral to deep moves (True Charged Slash) as sequences. |
+| Invalid moves | **Masked**: a move is valid iff some input, sent from the current root, resolves to it (the root's own edges, or neutral's for inputs the root doesn't claim). A masked call is a logged no-op that still costs a step. | User decision. The mask is exactly the tracker's resolution rule, so demo labels and agent calls can never disagree about what's possible. |
+| Graph state as a brain input | **Recorded, not observed**: every demo call and every `MHWEnv` step carries the combo state (root, path, depth, available options, relative label), but it isn't part of the observation. It's driven only by the agent's own calls — never Lua. | User decision: decide in Phase 2 (see "Not yet decided"). |
+| Demo labels | Timestamped evdev events (`demos/input_events.py`) → input primitives (`demos/tool_segmenter.py`) → moves via the tracker. Raw events are stored per episode, so `scripts/relabel_demos.py` can re-label old hunts after any graph/timing change. | User decision (input events + lmtID check). |
+| Label checking | `state_reader.lua` logs every player `lmtID` change during recording sessions; `scripts/audit_tool_labels.py` builds an lmtID catalog from *trusted* labels and checks label consistency, unseen edges, candidate edges, undeclared transitions and combo gaps. lmtIDs never feed a label or an observation. | Needed to verify the graph against the game. Trusted-only matters: a synthetic test showed the catalog otherwise gets poisoned by the very labels under audit. |
+| Unconfirmed edges | Declared: every chart edge traced cleanly, plus `side_blow_1 → hold Y → SCS` (user: tentative). Everything else unsure lives in `candidates:` — ignored by the tracker, given a SUPPORTED / contradicted verdict by the audit from **expert demonstrations**. The chart's orange "Wide Slash" circles mean "continue as if after Wide Slash" (user-confirmed). | User decision. |
+| Overlapping input | Camera pans during a move/attack are kept and flagged `overlaps`; the executor stays sequential. WASD held during an attack is its aim, not a separate move. | User decision — measure how often it happens first. |
+| Scope | Every chart move reachable with Y/B/A/RT. Sprint/slide/slope/aerial moves and slinger burst are graph nodes marked `reachable: false`; binding `rb`/`lt` flags demos that use them as `unrepresentable`. | User decision. |
+
+**Live checks still to do:** re-copy `state_reader.lua` (see
+`docs/modding_setup.md`); `nix run .#verify-tools` (confirm X/RT, tune
+`level_seconds`, run `--chain` for the charged-slash path); recalibrate
+bindings (bind `rt`/`rb`/`lt`, run the mouse sweep); record expert hunts
+→ `nix run .#audit-tool-labels` → promote/drop candidates, set real
+`combo_window_s`, flip edges to `verified`; `run-dummy-policy --policy
+random` through one quest.
 
 ## Not yet decided (later phases)
 
@@ -70,13 +106,13 @@ this repo self-contained (plus one new principle Phase 1 added):
   and slinger bursts.** Raised 2026-09-19: both are real parts of
   high-level Great Sword play (clutch claw wall-bang topples, slinger
   elemental-phial application) and relevant prep for tougher targets like
-  Alatreon specifically. Currently out of scope on purpose — the action
-  space is a deliberate minimal first pass (see the Phase 1 decisions
-  table above). Left open rather than decided either way; until it's
-  decided, **don't use clutch claw/slinger during recorded hunts** — the
-  current action space has no binding for them, so those frames would
-  get mislabeled `idle` while real actions happen on screen, corrupting
-  the demo data. Fine to use them in hunts that aren't being recorded.
+  Alatreon specifically. Still out of scope in the tool-based action
+  space (2026-09-24): `slinger_burst` is a `reachable: false` node in the
+  moveset graph, and clutch claw isn't in the graph at all. Until this
+  is decided, **don't use clutch claw/slinger during recorded hunts** —
+  bind the `lt` role (scripts/calibrate_keyboard_bindings.py) and slinger
+  presses get flagged `unrepresentable` instead of silently dropped, but
+  clutch claw has no role yet, so those frames would be mislabelled.
 
   **If/when this is decided, the natural mechanism is a staged expansion,
   not a dynamic one** (raised in chat, 2026-09-19): IL only ever learns
@@ -85,24 +121,33 @@ this repo self-contained (plus one new principle Phase 1 added):
   mid-training the way an RL curriculum might unlock content. So this
   isn't "the model gradually opens up its own action space" — it's
   collect a second demo batch with the expanded moveset, then continue
-  training on the combined dataset with a larger action space. The
-  architecture already has a hook for this: `env/action_space.py`'s
-  `ButtonOp.op` reserves `"press"`/`"release"` (unimplemented) for
-  exactly this kind of charge-hold mechanic, and since only a small
-  trainable surface is ever learned (gains/biases/encoders/readout — see
-  Design Principle 1), growing the action space later should mean
-  keeping the trained recurrent core and warm-start fine-tuning just a
-  grown readout layer, not retraining from scratch. Recommended
-  sequencing: get one clean basic-moveset IL policy working end-to-end
-  first, treat this expansion as a deliberate v2 stage after — not
-  something to fold into the first training pass.
+  training on the combined dataset with a larger action space. With the
+  tool-based space that means new tools + new graph nodes/edges; since
+  only a small trainable surface is ever learned (gains/biases/encoders/
+  readout — see Design Principle 1), growing the action space later
+  should mean keeping the trained recurrent core and warm-start
+  fine-tuning just a grown readout layer, not retraining from scratch.
+  Recommended sequencing: get one clean basic-moveset IL policy working
+  end-to-end first, treat this expansion as a deliberate v2 stage after —
+  not something to fold into the first training pass.
+- **Whether the brain receives the moveset-graph state as an input**
+  (decided to defer, 2026-09-24). Every demo call and env step records
+  the combo root, path, depth and available options, computed only from
+  the agent's own calls (an efference copy — not privileged game state).
+  Feeding it in would be the first non-pixel input channel, so it's an
+  explicit amendment to Design Principle 4 whenever Phase 2 decides it.
+  The same goes for the readout: absolute tool calls, factored heads, or
+  graph-relative (an index into the root's options) — all three are
+  derivable from the recorded data without re-recording.
 - Full connectome scale vs. a scoped-down subset (Phase 2 — needs measured
   parameter count / forward-pass latency first).
 - A proper win/fail/abandon distinction for episode endings, once
   `quest.state`'s real values are observed from a live run (see
   `configs/monsters/great_jagras.yaml`'s `episode_boundaries.notes`).
 - **Imitation-learning dataset size for Great Sword vs. Great Jagras**
-  (Phase 3). No fixed target — reasoning from chat, 2026-09-18: the action
+  (Phase 3). No fixed target — reasoning from chat, 2026-09-18 (written
+  for the old 8-action space; the tool-based space is ~230 flat calls,
+  which argues for more data or a factored/graph-relative readout): the action
   space is small and discrete (8 actions) and the connectome brain's
   trainable surface is modest by design (per-edge/per-neuron scalars, not
   a free-form weight matrix), both of which argue for less data than

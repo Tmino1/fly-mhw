@@ -107,6 +107,28 @@ was found and fixed:
 
 This is meant to be a living doc — keep updating it as Phase 1 finds more.
 
+## Player action id + action-change log (2026-09-24) — UNVERIFIED LIVE
+
+Added for the tool-based action space (`docs/architecture.md`). **Re-copy
+`lua_scripts/state_reader.lua` into the game's `Lua/` folder and run
+`reload state_reader`** — the game reads its own copy, not the repo's.
+
+- Every snapshot now carries `player.action = {lmt_id, fsm}`, read from
+  `Player.Action.{lmtID,fsm}` (field names from `Engine_player.lua`, per
+  "The real API" above — never read live yet). It's in its own `pcall`, so
+  if the shape is wrong you'll see `player.action = {"error": ...}` in
+  `verify-state-read` while the rest of the snapshot keeps working.
+- While `fly_mhw_action_log.flag` exists (next to `fly_mhw_state.json`),
+  every **change** of `lmtID` is appended to `fly_mhw_actions.jsonl` as
+  `{"lmt_id", "fsm", "t", "tick"}`. `scripts/record_hunt.py` creates the
+  flag for the length of a recording session and removes it after — same
+  pattern as the quest-end-skip flag, so untracked play writes nothing.
+  The flag's existence is checked once a second (with the snapshot write),
+  the lmtID itself every tick.
+- Checked only against stubbed LuaEngine globals under Lua 5.4 (the log
+  writes only on change, only while the flag exists). First live check:
+  `verify-state-read` shows `player.action` changing when you attack.
+
 ## SharpPluginLoader (2026-09-19) — for the post-hunt timer skip
 
 Installed to get a real, working "skip the return-to-camp timer" —

@@ -59,7 +59,24 @@ see `docs/architecture.md`'s Phase 1 decisions table.
 
 Recommended order from here: `run_dummy_policy.py --policy idle` (one full
 quest) → `run_dummy_policy.py --policy random` (the crash-resistance
-acceptance test). Offline regression suite: `python tests/test_reward.py`.
+acceptance test).
+
+**Tool-based action space + moveset graph (branch `tool-action-space`) —
+built and tested offline, NOT verified live yet.** The 8 raw-input
+actions and the 0.2s key-state demo labels are replaced by move-named
+tool calls (`strong_charged_slash(direction, level)`, ...), a Great Sword
+moveset graph transcribed from the Iceborne flowchart that re-roots at
+the latest move, timestamped-event demo recording, and an lmtID-based
+label audit. See `docs/architecture.md`'s "Tool-based action space +
+moveset graph" for the decisions and the live checks still to do
+(`verify-tools`, rebinding keys, `audit-tool-labels` over expert hunts).
+
+Offline regression suite (no game, no evdev needed except where noted —
+runs on macOS too):
+
+```sh
+for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
+```
 
 ## This machine's environment (recorded 2026-09-14)
 
@@ -102,7 +119,8 @@ pip install -r requirements.txt
    single-player too, LuaEngine repurposes the local text box as a command
    console) and run `reload state_reader`. (If you ever edit
    `lua_scripts/state_reader.lua`, re-copy it into the game's `Lua/`
-   folder first — it's not symlinked, the game reads its own copy.)
+   folder first — it's not symlinked, the game reads its own copy. The
+   `tool-action-space` branch changed it: re-copy once before recording.)
 3. Confirm state is flowing: `nix run .#verify-state-read` — should
    stream a fresh player/monster/quest snapshot every second. `Ctrl-C` to
    stop.
@@ -120,16 +138,18 @@ nix run .#verify-state-read
 nix run .#verify-input-injection
 nix run .#list-windows              # dump Hyprland window class/title/geometry — see docs/performance_tuning.md
 nix run .#run-dummy-policy -- \
-  --weapon configs/weapons/greatsword.yaml \
   --monster configs/monsters/great_jagras.yaml \
   --state-path "$HOME/.local/share/Steam/steamapps/common/Monster Hunter World/fly_mhw_state.json" \
   --policy idle
-nix run .#calibrate-keyboard-bindings -- --weapon configs/weapons/greatsword.yaml
+nix run .#calibrate-keyboard-bindings   # keys -> input roles, plus a mouse camera sweep
 nix run .#record-hunt   # zero args needed — defaults to the pilot pair + this machine's MHW install
+nix run .#verify-tools  # live check of each move via its shortest combo path (--chain a,b,c)
+nix run .#audit-tool-labels   # demo labels + moveset graph vs the game's own lmtIDs
+nix run .#relabel-demos       # re-label recorded episodes after a graph/timing change
 ```
 
 `nix develop` is still there for anything not wrapped as an app yet (e.g.
-`python tests/test_reward.py`, or ad-hoc `python -c "..."` checks).
+the `tests/` suite, or ad-hoc `python -c "..."` checks).
 
 Both `verify-state-read` and `verify-input-injection` are described in
 [`docs/modding_setup.md`](docs/modding_setup.md) and are the Phase 0
