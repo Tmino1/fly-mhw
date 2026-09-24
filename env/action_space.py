@@ -1,4 +1,9 @@
 """
+LEGACY (v1): superseded by env/tools.py + env/moveset_graph.py +
+env/tool_executor.py (the tool-based action space — see
+docs/architecture.md). Kept so v1 demo episodes and
+scripts/verify_action_mapping.py keep working; nothing new should use it.
+
 Turns a weapon config (configs/weapons/*.yaml) into a usable discrete
 action interface over env/game_interface/input_injector.py's
 VirtualGamepad. No weapon-specific knowledge lives here — swapping
@@ -12,40 +17,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from evdev import ecodes
-
 from .config_loader import load_config
+from .evdev_codes import resolve_code
 from .game_interface.input_injector import VirtualGamepad
 
 WEAPON_CONFIG_SCHEMA = "fly-mhw/weapon_config/v1"
 
-# Confirmed live 2026-09-14 (see configs/weapons/greatsword.yaml and
-# docs/risks.md): evdev's compass-direction button aliases are swapped
-# from their intuitive meaning — BTN_NORTH is numerically BTN_X, and
-# BTN_WEST is numerically BTN_Y. A weapon config almost certainly means
-# the letter when it says "Y" or "X", so warn loudly if a compass alias
-# shows up — it's very likely a bug, the same one attack_1 originally had.
-_COMPASS_ALIAS_WARNING = {
-    "BTN_NORTH": "BTN_X",
-    "BTN_WEST": "BTN_Y",
-    "BTN_SOUTH": "BTN_A",  # not actually swapped, but flagged too since it's
-    "BTN_EAST": "BTN_B",   # the same family of alias and easy to typo-confuse
-}
-
-
-def _resolve_code(name: str) -> int:
-    if name in _COMPASS_ALIAS_WARNING:
-        print(
-            f"[action_space] WARNING: {name!r} is a compass alias, numeric "
-            f"value {hex(getattr(ecodes, name))} == {_COMPASS_ALIAS_WARNING[name]!r}. "
-            f"If you meant the letter button, use {_COMPASS_ALIAS_WARNING[name]!r} "
-            "directly instead — BTN_NORTH/BTN_WEST in particular are NOT what "
-            "their compass name suggests. See docs/risks.md."
-        )
-    try:
-        return getattr(ecodes, name)
-    except AttributeError as exc:
-        raise ValueError(f"unknown evdev code {name!r}") from exc
+# Kept as a module-level alias so any external caller of the old private
+# name keeps working; the implementation (and the compass-alias warning)
+# now lives in env/evdev_codes.py, shared with the v2 tool executor.
+_resolve_code = resolve_code
 
 
 @dataclass(frozen=True)

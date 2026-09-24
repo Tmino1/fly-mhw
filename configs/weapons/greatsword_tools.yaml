@@ -1,0 +1,117 @@
+# Great Sword tool-based action space, v1 — supersedes greatsword.yaml
+# (kept as legacy for v1 demos). See docs/architecture.md's "Tool-based
+# action space + moveset graph".
+#
+# Tools are named after MOVES (user decision, 2026-09-24). Which input
+# produces a move depends on the combo root, so that mapping lives in the
+# moveset graph (greatsword_moveset.yaml), not here. This file holds:
+#   - the tool list and each tool's discrete args,
+#   - `inputs`: what each input primitive does on the virtual gamepad,
+#   - `timings` / `directions`: the lookup tables those programs use,
+#   - `segmenter`: how a human's keyboard/mouse events are grouped into
+#     the same input primitives when recording demos.
+#
+# GOTCHA CONFIRMED LIVE (2026-09-14) — READ BEFORE ADDING A NEW WEAPON:
+# evdev's compass-direction button aliases are NOT what the names suggest.
+# BTN_NORTH is numerically THE SAME CODE as BTN_X, and BTN_WEST is THE
+# SAME CODE as BTN_Y. Always use the letter alias (BTN_Y/BTN_X/BTN_A/
+# BTN_B), never the compass alias. env/evdev_codes.py warns if one shows up.
+#
+# VERIFICATION STATUS: Y/B/A and the left-stick signs are carried over
+# from greatsword.yaml, where they were verified live 2026-09-14. X
+# (sheathe — from the chart's button table: X / E = Sheathe), RT, the
+# right stick, every timing and every combo are UNVERIFIED — run
+# scripts/verify_tools.py.
+schema: "fly-mhw/weapon_tools/v1"
+name: "Great Sword"
+weapon_type_id: 0  # confirmed empirically against player.weapon_type — see docs/risks.md
+moveset: "configs/weapons/greatsword_moveset.yaml"
+
+gamepad:
+  buttons: {Y: BTN_Y, B: BTN_B, A: BTN_A, X: BTN_X}
+  left_stick: {x: ABS_X, y: ABS_Y}
+  right_stick: {x: ABS_RX, y: ABS_RY}
+  right_trigger: {code: ABS_RZ, pressed: 255}
+  verified: {Y: true, B: true, A: true, X: false, left_stick: true, right_stick: false, right_trigger: false}
+
+# Left-stick values per direction. Cardinal values are greatsword.yaml's
+# verified ones (forward = stick up = ABS_Y negative); diagonals are the
+# same magnitude at 45 degrees (32767 / sqrt(2)). Movement and attack
+# aim are camera-relative in MHW.
+directions:
+  none: [0, 0]
+  forward: [0, -32767]
+  forward_right: [23170, -23170]
+  right: [32767, 0]
+  back_right: [23170, 23170]
+  back: [0, 32767]
+  back_left: [-23170, 23170]
+  left: [-32767, 0]
+  forward_left: [-23170, -23170]
+
+# All placeholders except tap_seconds/dodge_tap_seconds (greatsword.yaml's
+# live-confirmed 0.15s/0.1s).
+timings:
+  tap_seconds: 0.15
+  dodge_tap_seconds: 0.1
+  stick_settle_seconds: 0.05   # stick set before the button, so the move reads the aim
+  # Hold time at which each charge level is reached. The executor holds
+  # level_seconds[level] + level_hold_margin_seconds; the segmenter
+  # classifies a human hold by the same thresholds. GS over-charges
+  # (drops back) if held well past lv3, so keep the margin small.
+  level_seconds: {lv1: 0.0, lv2: 0.75, lv3: 1.5}
+  level_hold_margin_seconds: 0.15
+  min_charge_hold_seconds: 0.35   # the shortest hold the executor sends for a lv1 charge
+  tackle_tap_seconds: 0.15
+  yb_hold_seconds: 0.15
+  rt_before_y_seconds: 0.1
+  duration_seconds: {short: 0.4, long: 1.0}
+  camera_amount_seconds: {small: 0.15, large: 0.4}
+  camera_stick_value: 32767
+
+arg_values:
+  direction: [none, forward, forward_right, right, back_right, back, back_left, left, forward_left]
+  move_direction: [forward, forward_right, right, back_right, back, back_left, left, forward_left]
+  level: [lv1, lv2, lv3]
+  duration: [short, long]
+  yaw: [left, right]
+  amount: [small, large]
+
+# kind: graph -> a move in the moveset graph; which input sends it depends
+#               on the current root (masked when no option reaches it).
+# kind: timed -> not part of the combo graph; always available, never
+#               changes the combo root (only the combo window expiring does).
+# `args` maps each arg name to an arg_values set.
+tools:
+  - {name: overhead_smash, kind: graph, args: {direction: direction}}
+  - {name: charged_slash, kind: graph, args: {direction: direction, level: level}}
+  - {name: strong_charged_slash, kind: graph, args: {direction: direction, level: level}}
+  - {name: true_charged_slash, kind: graph, args: {direction: direction, level: level}}
+  - {name: tackle, kind: graph, args: {direction: direction, level: level}}
+  - {name: side_blow_1, kind: graph, args: {direction: direction}}
+  - {name: side_blow_2, kind: graph, args: {direction: direction}}
+  - {name: rising_slash, kind: graph, args: {direction: direction}}
+  - {name: rising_slash_1, kind: graph, args: {direction: direction}}
+  - {name: rising_slash_2, kind: graph, args: {direction: direction}}
+  - {name: wide_slash, kind: graph, args: {direction: direction}}
+  - {name: strong_wide_slash, kind: graph, args: {direction: direction}}
+  - {name: jumping_wide_slash, kind: graph, args: {direction: direction}}
+  - {name: guard, kind: graph, args: {duration: duration}}
+  - {name: kick, kind: graph, args: {direction: direction}}
+  - {name: dodge, kind: graph, args: {direction: direction}, notes: "A — available from every root."}
+  - {name: sheathe, kind: graph, args: {}, notes: "X / E — available from every root."}
+  - {name: wait, kind: timed, args: {duration: duration}}
+  - {name: move, kind: timed, args: {direction: move_direction, duration: duration}}
+  - {name: camera, kind: timed, args: {yaw: yaw, amount: amount}}
+
+# Demo side: how demos/tool_segmenter.py groups raw keyboard/mouse
+# events into the same input primitives. Keyboard roles come from
+# configs/keyboard_bindings.yaml (v2). Placeholders — tune against real
+# recordings.
+segmenter:
+  tap_max_seconds: 0.3          # Y released before this = y_tap, else y_hold
+  yb_simultaneous_seconds: 0.08 # Y and B pressed within this = yb
+  guard_min_seconds: 0.3        # RT held this long before a Y = guard, then rt_y
+  min_move_seconds: 0.1         # shorter WASD holds are just aim, not a move call
+  min_wait_seconds: 0.3         # shorter idle gaps are not recorded as wait
+  camera_window_seconds: 0.2
