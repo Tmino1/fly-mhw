@@ -66,7 +66,9 @@ def state(quest_id=1):
     }, read_at=0.0, file_age_seconds=0.1)
 
 
-mhw_env.capture_frame = lambda geometry=None: CaptureResult(image="IMG", latency_seconds=0.0, captured_at=0.0)
+mhw_env.capture_frame = lambda geometry=None: CaptureResult(
+    image="IMG", latency_seconds=0.0, captured_at=0.0, raw_bytes=b"", raw_format="jpeg"
+)
 mhw_env.time.sleep = lambda s: None  # executor + env sleeps are instant
 
 env = MHWEnv(REPO / "configs/weapons/greatsword_tools.yaml", REPO / "configs/monsters/great_jagras.yaml",

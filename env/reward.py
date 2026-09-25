@@ -163,7 +163,48 @@ class RewardModel:
                 reason = "player_cart"
                 reward += self.player_cart_penalty
 
-        # 2. monster list emptied out of a real (in-progress) quest
+        # 2. quest reaches the post-hunt "return to camp" wait screen
+        # (quest.state == 3) — the earliest reliable end-of-hunt signal,
+        # confirmed live 2026-09-19 against a real clean kill: HP was
+        # already 0.0 on the very first step quest.state read 3, with the
+        # monster entity still present (monster_count == 1) — well before
+        # the OLDER "monster list empties" check below could ever fire
+        # (that one only trips once you're fully back at the hub and the
+        # whole map's wildlife unloads too, ~150 steps later on that same
+        # episode). Ending here instead of waiting for condition 3 matters
+        # for two reasons: (a) it cuts ~150 steps/episode of pure
+        # post-hunt-wait idle time out of recorded demos for free, and
+        # (b) demos/recorder.py's post-hunt-wait auto-skip only fires
+        # a real memory write while quest.state==3 is being actively
+        # polled for recording — ending the episode (and therefore
+        # dropping the skip flag) the moment state==3 is OBSERVED, before
+        # ever handing control back to the polling loop, means that write
+        # never gets a chance to fire for a hunt this code already knows
+        # is over. Root-causing why the skip write might itself be
+        # crashing state_reader.lua's host process is explicitly NOT
+        # pursued here — this makes the question moot for recording.
+        if not terminated:
+            quest_curr_early = curr_state.raw.get("quest")
+            curr_quest_state = quest_curr_early.get("state") if isinstance(quest_curr_early, dict) else None
+            prev_quest_early = prev_state.raw.get("quest") if prev_state else None
+            prev_quest_state = prev_quest_early.get("state") if isinstance(prev_quest_early, dict) else None
+
+            if curr_quest_state == 3 and prev_quest_state != 3:
+                terminated = True
+                # Prefer the freshest HP reading (curr — the monster entity
+                # is still present this exact step, see comment above);
+                # fall back to prev in case curr's read came back empty.
+                last_known_frac = monster_curr_frac if monster_curr_frac is not None else monster_prev_frac
+                if last_known_frac is not None and last_known_frac <= self.near_zero_hp_threshold:
+                    reason = "monster_defeated"
+                    reward += self.monster_defeated_bonus
+                else:
+                    reason = "quest_ended_unknown"
+                    reward += self.quest_ended_unknown_reward
+
+        # 3. monster list emptied out of a real (in-progress) quest — kept
+        # as a fallback for whatever fail/abandon path never passes
+        # through quest.state==3 (still unconfirmed, see docs/risks.md).
         if not terminated:
             prev_quest = prev_state.raw.get("quest") if prev_state else None
             prev_quest_id = prev_quest.get("id") if isinstance(prev_quest, dict) else None
@@ -187,7 +228,7 @@ class RewardModel:
                     reason = "quest_ended_unknown"
                     reward += self.quest_ended_unknown_reward
 
-        # 3. step budget exhausted
+        # 4. step budget exhausted
         if not terminated and step_index + 1 >= self.max_episode_steps:
             truncated = True
             reason = "max_steps"

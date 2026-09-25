@@ -16,3 +16,8 @@ result-*
 # connectome-brain agent) — separate workspaces, reviewed/merged
 # manually, never committed directly here
 /.claude/
+
+# dotnet build output for mod_plugins/ (e.g. QuestStartTrigger) —
+# regenerable via `dotnet build`, not source
+/mod_plugins/**/bin/
+/mod_plugins/**/obj/

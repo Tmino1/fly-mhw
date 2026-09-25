@@ -82,6 +82,7 @@ number.
 | Recording session shape | `scripts/record_hunt.py` runs as a long-lived session, not one hunt per invocation — after each episode ends it automatically goes back to waiting for the next quest-accept, looping until Ctrl+C or `--max-episodes` | Launching the recorder fresh and timing it against each individual quest-accept proved impractical live — coordinating "start the recorder, then accept within N seconds" for every single hunt doesn't scale to recording dozens of them. `--reset-timeout` (10 min default) covers the between-hunts gap (restocking, traveling), not just one hunt's worth of patience. |
 | Auto-skip the post-hunt "return to camp" wait | A direct memory write from `lua_scripts/state_reader.lua`, gated on a flag file `DemoRecorder` creates/removes (`fly_mhw_skip_quest_end.flag`, next to `fly_mhw_state.json`) — no input injection, no SharpPluginLoader dependency, at all | Two earlier approaches failed first: a `BTN_SOUTH` gamepad tap did nothing (confirmed live — turned out to be a keyboard/mouse-driven UI, not a gamepad one, from a screenshot showing a "Tab" key icon), and UI automation (SharpPluginLoader's F9 menu, click a button) would have needed a new absolute-position pointer-click mechanism and been fragile to layout changes. The actual fix replicates SharpPluginLoader's own open-source "Quest End Skip" example plugin's technique — `Quest.QuestEndTimer.SetToEnd()` is just `Timer.Time = Timer.MaxTime` (read directly from `github.com/Fexty12573/SharpPluginLoader`'s `Quest.cs`/`Timer.cs`, not guessed) — as a raw memory write at the same `sQuest` singleton our own Lua already resolves (confirmed: SPL's own source lists `CurrentQuestId`/`QuestState` at the exact same `+0x4C`/`+0x54` offsets `Engine_quest.lua` already uses). The flag file only exists while a recording session is actively requesting it, so normal untracked play never sees this at all (explicit requirement). |
 | Capture format: JPEG, not PNG (supersedes the "Demo storage format" row above) | `env/game_interface/capture.py`'s `capture_frame()` now defaults to JPEG (quality 85); `demos/recorder.py` writes grim's raw bytes straight to disk instead of round-tripping through PIL (`frame_%06d.jpg` for new episodes, existing `.png` episodes still load fine) | Measured live at this project's actual capture geometry (2003,33 3324x1374), 2026-09-19: PNG capture alone averaged 280ms/frame (sustained 3.47 fps) — almost certainly the real reason the pipeline topped out below its documented 5fps target, since one capture could already exceed the 200ms step budget. JPEG: 33.8 fps sustained (10x), PIL decode 4x faster, files 2.8x smaller. |
+| Starting a quest programmatically, without walking to the Handler | A small custom SharpPluginLoader C# plugin (`mod_plugins/QuestStartTrigger/Plugin.cs`) calls `AcceptQuest(questMgr, questId, bool)` + `DepartOnQuest(questMgr, bool)` directly via the same `NativeFunction<...>` wrapper SharpPluginLoader's own `Quest.cs` uses for `GetQuestName` — triggered by an in-game F8 hotkey (fixed to this project's pilot quest, 90099) or a flag file (`scripts/trigger_quest_start.py` writes it, for an arbitrary quest id) | `questMgr == Quest.SingletonInstance.Instance` was an inference (every other hooked function in `Quest.cs` takes the same first parameter and none reference any other singleton) — **confirmed correct for both calls, live, 2026-09-19**: `quest.state` went accepted (1) -> in-hunt (2), player position genuinely changed (teleported into the arena map), no crash. Needed for RL fine-tuning's much higher episode-restart rate, and doubles as a recording-session convenience (F8) that doesn't need alt-tabbing to a terminal. |
 
 ## Tool-based action space + moveset graph (2026-09-24, branch `tool-action-space`)
 
@@ -178,32 +179,6 @@ segmenter, label audit) carries over untouched.
 - A proper win/fail/abandon distinction for episode endings, once
   `quest.state`'s real values are observed from a live run (see
   `configs/monsters/great_jagras.yaml`'s `episode_boundaries.notes`).
-- **Starting a quest programmatically, without walking to the Handler.**
-  Raised 2026-09-19 — user's call: deferred for now, "probably more
-  important for RL when we get there" (RL fine-tuning needs far more
-  episode restarts than IL data collection, so the per-restart friction
-  matters more there). Found the real mechanism but didn't build it, given
-  the risk: SharpPluginLoader's own source (`Quest.cs`, already installed
-  on this machine) exposes the native function the game calls internally
-  on quest accept — `AcceptQuest(questMgr, questId, bool)` at a known
-  address (`AddressRepository.Get("Quest:AcceptQuest")`), which
-  SharpPluginLoader already *hooks* (intercepts) but doesn't itself call
-  directly anywhere in the file. A small custom SharpPluginLoader C#
-  plugin could call it directly via the same `NativeFunction<...>`
-  wrapper the file already uses for `GetQuestName` — buildable on Linux
-  with the dotnet SDK, no Wine needed, same deployment path (drop the DLL
-  in `nativePC/plugins/csharp/`) already used for Yomi Utils. **Not
-  attempted**: unlike the quest-end-timer skip (a plain memory read/write,
-  safe and well-scoped), this means *calling* a native function, and
-  `questMgr`'s correct value is inferred, not confirmed — every other
-  hooked function in the same file (`EnterQuest`, `LeaveQuest`,
-  `AbandonQuest`, etc.) takes the same `nint questMgr` first parameter and
-  none reference any singleton besides `sQuest`, so `questMgr ==
-  Quest.SingletonInstance.Instance` (the same pointer this project's own
-  `state_reader.lua` already resolves for the timer skip) is a reasonable
-  inference — but if it's wrong, the likely failure mode is a game crash,
-  not a quiet no-op. Whoever picks this up should test on a throwaway
-  session, not mid-recording.
 - **IL -> RL fine-tuning technique (Phase 4): Q2RL.** Raised 2026-09-19,
   still the plan as of 2026-09-25 even after dropping `ConnectomeBrain`.
   [Q2RL](https://q2rl.rai-inst.com/) (Dodeja et al., RSS 2026; RAI

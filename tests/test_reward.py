@@ -93,6 +93,44 @@ curr4 = gs(
 out4 = r.step(prev4, curr4, 3)
 check("quest ended unknown", out4, {"terminated": True, "truncated": False, "reason": "quest_ended_unknown"})
 
+# 4b. quest.state transitions straight to 3 (post-hunt wait) with the
+# monster's HP already near-zero and still present in the monsters list
+# (monster_count stays 1) — the earlier, preferred end-of-hunt signal
+# added 2026-09-19 so recording doesn't have to wait for the monsters
+# list to empty out (which only happens much later, back at the hub).
+prev4b = gs(
+    player={"health_current": 140, "health_max": 150},
+    monsters=[{"id": 1, "health_current": 0.0, "health_max": 500}],
+    quest={"id": 42, "state": 2},
+)
+curr4b = gs(
+    player={"health_current": 140, "health_max": 150},
+    monsters=[{"id": 1, "health_current": 0.0, "health_max": 500}],
+    quest={"id": 42, "state": 3},
+)
+out4b = r.step(prev4b, curr4b, 2)
+check("monster defeated via quest.state==3 (early signal)", out4b,
+      {"terminated": True, "truncated": False, "reason": "monster_defeated"})
+ok4b = out4b.monster_count == 1
+print(f"        {'[OK]' if ok4b else '[FAIL]'} monster still counted this step: "
+      f"monster_count={out4b.monster_count} (expected 1)")
+
+# 4c. quest.state==3 reached but monster wasn't near 0 HP (captured/fled) —
+# same "unknown" bucketing as the monsters-list-empties fallback.
+prev4c = gs(
+    player={"health_current": 140, "health_max": 150},
+    monsters=[{"id": 1, "health_current": 300, "health_max": 500}],
+    quest={"id": 42, "state": 2},
+)
+curr4c = gs(
+    player={"health_current": 140, "health_max": 150},
+    monsters=[{"id": 1, "health_current": 300, "health_max": 500}],
+    quest={"id": 42, "state": 3},
+)
+out4c = r.step(prev4c, curr4c, 3)
+check("quest.state==3 but monster not near-death (unknown)", out4c,
+      {"terminated": True, "truncated": False, "reason": "quest_ended_unknown"})
+
 # 5. Max steps truncation (no other terminal condition)
 out5 = r.step(prev, curr, r.max_episode_steps - 1)
 check("max steps truncation", out5, {"terminated": False, "truncated": True, "reason": "max_steps"})

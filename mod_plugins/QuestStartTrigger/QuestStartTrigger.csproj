@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Side-project, not part of the ML pipeline (mirrors scripts/patch_arena_quest.py's
+    framing) — a minimal SharpPluginLoader (github.com/Fexty12573/SharpPluginLoader)
+    C# plugin so recording sessions can start the next hunt without walking to the
+    Handler. See docs/architecture.md's "Starting a quest programmatically" entry.
+
+    No SharpPluginLoader.Core NuGet package/source tree is available offline, so this
+    references the DLL already sitting in the live MHW install (from the SharpPluginLoader
+    install done 2026-09-19 for the post-hunt timer skip) directly by path. That path is
+    machine-specific — update HintPath if this is ever built on a different machine/install.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="SharpPluginLoader.Core">
+      <HintPath>/home/ad/.local/share/Steam/steamapps/common/Monster Hunter World/nativePC/plugins/CSharp/Loader/SharpPluginLoader.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
