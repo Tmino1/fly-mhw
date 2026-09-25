@@ -74,7 +74,7 @@ note). 5 fps is a real improvement but still a coarse control rate — see
 | 4 | Foliage Sway, SH Diffuse, LOD Bias/Max LOD Level | Moderate–high | Drop next |
 | 5 | Ambient Occlusion | Moderate | |
 | 6 | Shadow Quality, Screen Space Reflection | Low–moderate | |
-| 7 | Anti-Aliasing (currently TAA+FXAA) | Low | **Leave alone even when trimming elsewhere** — a cleaner, less noisy frame is also better input for the connectome's visual encoder later (project-specific reason on top of the general one) |
+| 7 | Anti-Aliasing (currently TAA+FXAA) | Low | **Leave alone even when trimming elsewhere** — a cleaner, less noisy frame is also better input for the policy's visual encoder later (project-specific reason on top of the general one) |
 
 Suggested order: (1) → measure → (2) → measure → only then start on 3–5.
 

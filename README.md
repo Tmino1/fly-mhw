@@ -2,18 +2,20 @@
 
 # Very early stage prototype
 
-Teaching a fruit-fly brain connectome to hunt in Monster Hunter World.
+Teaching an agent to hunt in Monster Hunter World from pixels: imitation
+learning on recorded human hunts, then RL fine-tuning against the live game.
 
-The "brain" is a recurrent network instantiated from the real synaptic wiring
-of a fruit fly's brain (topology and synapse sign fixed, only a small set of
-gains/biases/encoders/readout trained — same approach as
-[flyvis](https://github.com/TuragaLab/flyvis) and
-[haltere](https://github.com/skulitom/haltere)). See
-[`docs/architecture.md`](docs/architecture.md) for the full design and the
-project roadmap it's based on.
+The project started as "teach a fruit-fly brain connectome to hunt" (hence
+the name). The connectome was dropped on 2026-09-24 in favor of an
+ordinary learned policy — the direction being explored is one base model
+shared across weapons and monsters. See
+[`docs/architecture.md`](docs/architecture.md) for the design and decisions
+so far, and [`docs/ideas.md`](docs/ideas.md) for ideas still under
+discussion.
 
 **Target pair:** Great Jagras, with the Great Sword. Monster/weapon are
-config, not code — see the roadmap's Design Principles before adding either.
+config, not code — see `docs/architecture.md`'s Design Principles before
+adding either.
 
 ## Status
 

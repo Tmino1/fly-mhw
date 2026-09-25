@@ -18,9 +18,10 @@ no-op (info["invalid_call"]) that still costs a step.
 info["action_mask"] is the flat mask for the NEXT step.
 
 The combo state (info["moveset"]) is driven only by the agent's own
-calls, and — like everything else in info — is not part of the
-observation. Whether the brain ever receives it is an open Phase 2
-decision (docs/architecture.md, Design Principle 4).
+calls — an efference copy, not game memory. Design Principle 4
+(docs/architecture.md) makes it a policy input alongside the image; it
+isn't folded into the observation yet, so Phase 2 reads it from info.
+Everything else in info (reward_debug etc.) is never a policy input.
 
 reset() does NOT accept the quest itself — a human accepts it; reset()
 only detects the -1 -> real-id transition (bounded by a timeout).

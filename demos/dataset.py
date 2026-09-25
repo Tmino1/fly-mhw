@@ -13,8 +13,9 @@ tracker marked `starts_chain` (a fresh/expired/returned-to neutral, a
 re-root, a dodge, or an unresolved input) — for learning the paths from
 neutral to deep moves as sequences.
 
-Whether the graph state is ever fed to the brain as an input is an open
-Phase 2 decision (docs/architecture.md); here it's just carried along.
+The graph state is a policy input (an efference copy — Design
+Principle 4, docs/architecture.md); here it's carried alongside each
+frame for Phase 2 to feed in.
 """
 
 from __future__ import annotations

@@ -57,15 +57,16 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
   `docs/performance_tuning.md`/`docs/architecture.md`) if it proves
   limiting once Phase 4 actually needs to react to fast monster tells in
   real time. Not a blocker for Phase 1-3 work.
-- **Licensing.** Connectome dataset, flyvis, and haltere licenses all need
-  individual verification before any code is vendored or a derived model is
-  used/shared. Not yet checked — do this before Phase 2 goes deep.
+- **Licensing.** Any pretrained model weights (e.g. a vision backbone) or
+  vendored code need their licenses checked before a derived model is
+  used/shared. (The connectome dataset / flyvis / haltere concern went away
+  with the connectome, 2026-09-24.) Do this before Phase 2 goes deep.
 - **Scope: single-player/offline only.** Automating solo hunts is broadly
   tolerated in the modding community; automating anything touching
   online/multiplayer is a materially different ToS/anti-cheat risk and
   stays explicitly out of scope for this project.
 - **Realistic effort.** Multi-week-to-multi-month even optimistically —
-  connectome-scale model work, unproven MHW reverse-engineering, and a
+  multi-weapon/multi-monster model work, unproven MHW reverse-engineering, and a
   real-time-only training loop are all individually substantial.
 - **Reward signal noise/latency.** LuaEngine reads will lag true game state
   by some unmeasured amount — affects both demo-recording synchronization

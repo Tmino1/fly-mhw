@@ -1,5 +1,5 @@
 {
-  description = "fly-mhw: teaching a fruit-fly brain connectome to hunt in Monster Hunter World";
+  description = "fly-mhw: teaching an agent to hunt in Monster Hunter World from pixels";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -11,7 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Phase 0/1 deps. Phase 2+ (brain/training work) will add torch,
+        # Phase 0/1 deps. Phase 2+ (model/training work) will add torch,
         # numpy, etc. here once that starts — same list requirements.txt
         # tracks for non-Nix machines.
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [

@@ -3,7 +3,7 @@ The tool-based action space: configs/weapons/*_tools.yaml -> a ToolSet of
 named tools (moves) with small discrete args. Supersedes the legacy
 8-action env/action_space.py.
 
-A tool call is what the brain picks and what demos are labelled with —
+A tool call is what the policy picks and what demos are labelled with —
 e.g. ToolCall("strong_charged_slash", direction="forward", level="lv2").
 Graph tools are moves in the weapon's moveset graph (env/moveset_graph.py):
 which input produces them depends on the combo root, and whether they're
