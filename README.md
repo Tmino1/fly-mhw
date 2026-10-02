@@ -1,17 +1,20 @@
-# fly-mhw
+# mhw-rl
 
 # Very early stage prototype
 
 Teaching an agent to hunt in Monster Hunter World from pixels: imitation
 learning on recorded human hunts, then RL fine-tuning against the live game.
 
-The project started as "teach a fruit-fly brain connectome to hunt" (hence
-the name). The connectome was dropped on 2026-09-24 in favor of an
-ordinary learned policy — the direction being explored is one base model
-shared across weapons and monsters. See
-[`docs/architecture.md`](docs/architecture.md) for the design and decisions
-so far, and [`docs/ideas.md`](docs/ideas.md) for ideas still under
-discussion.
+The project started as "teach a fruit-fly brain connectome to hunt"
+(hence the old repo name, `fly-mhw`). The connectome was dropped on
+2026-09-24 in favor of an ordinary learned policy, and the project has
+since moved to a **tool-based action space**: move-named tool calls
+(`charged_slash`, `dodge`, ...) validated against a **moveset graph**
+that tracks the Great Sword's actual combo state, replacing both the
+original 8 flat discrete actions and raw key-state polling. See
+[`docs/architecture.md`](docs/architecture.md) for the full design and
+decision history, and [`docs/ideas.md`](docs/ideas.md) for ideas still
+under discussion.
 
 **Target pair:** Great Jagras, with the Great Sword. Monster/weapon are
 config, not code — see `docs/architecture.md`'s Design Principles before
@@ -19,59 +22,45 @@ adding either.
 
 ## Status
 
-**Phase 0 (tooling spike) — done.** Both verification scripts pass against
-the live game:
+**Phase 0 (tooling spike) — done, verified live.** State reads
+(`state_reader.lua`), virtual-gamepad input, and screen capture (now
+JPEG, 10x the throughput of the original PNG path) all confirmed working
+against the real game. See `docs/architecture.md`'s Phase 0 table.
 
-- ✅ `state_reader.lua` writes a fresh, correct player/monster/quest
-  snapshot every second (`docs/modding_setup.md` has the one real bug
-  found and fixed along the way — a broken repeat-write timer).
-- ✅ The virtual gamepad reaches the game — confirmed via MHW's menu
-  "confirm" action landing on repeated South-button taps
-  (`docs/risks.md` has the timing bug that caused the first failed
-  attempt, and the OS-level udev diagnostics that ruled out
-  detection/anti-cheat as the cause).
-- ⚠️ `grim`-based capture works but is slow (~2.4 fps) until cropped to
-  just the game window — see
-  [`docs/performance_tuning.md`](docs/performance_tuning.md). Not a Phase
-  0 blocker, but worth doing before Phase 1's environment loop needs
-  real throughput.
+**Phase 1 (original 8-action `MHWEnv`) — done, verified live, now
+superseded.** The original flat action space (`idle`, movement,
+`attack_1/2`, `dodge`) was fully built and live-verified, catching two
+real bugs along the way (swapped evdev compass aliases, a target-
+selection bug with multiple monster entities). It's superseded by the
+tool-based action space below, but the legacy files
+(`env/action_space.py`, `configs/weapons/greatsword.yaml`,
+`scripts/verify_action_mapping.py`) stay for the old v1 demos.
 
-**Phase 1 (MHWEnv + configs) — action mapping verified live, quest loop
-not yet run.** `MHWEnv`, `action_space.py`, `reward.py`, and the Great
-Sword / Great Jagras configs exist and pass offline tests (config
-loading, a 7-case reward-logic fixture suite, `MHWEnv` construction) —
-see `docs/architecture.md`'s Phase 1 decisions table.
+**Tool-based action space + moveset graph — built, offline-tested,
+NOT verified live yet.** This is the current direction (see
+`docs/architecture.md`'s "Tool-based action space + moveset graph"
+section): move-named tool calls, a Great Sword moveset graph transcribed
+from the Iceborne flowchart that re-roots at the latest move,
+timestamped-event demo recording, and an lmtID-based label audit.
+**Next up:** `verify-tools`, rebinding keys, `audit-tool-labels` over
+real hunts — none of this has touched the live game yet.
 
-- ✅ **All 8 actions verified live.** Attacks/dodge confirmed against the
-  game's own HUD legends and actual move execution; movement confirmed by
-  measuring position deltas (forward/backward and left/right both exactly
-  antiparallel, forward ⊥ left) plus a visual landmark check.
-- ✅ Two real bugs caught by verifying instead of trusting guesses:
-  evdev's `BTN_NORTH`/`BTN_WEST` compass aliases are numerically
-  **swapped** from their intuitive meaning (`BTN_NORTH` == `BTN_X`,
-  `BTN_WEST` == `BTN_Y`) — read `configs/weapons/greatsword.yaml`'s header
-  before writing any new weapon config; and `monsters[0]` target selection
-  was disproved by a live dump showing 11 simultaneous monster entities.
-  `sheathe_unsheathe` was attempted twice and dropped (not load-bearing).
-- ⬜ `quest.state`'s real values are still unknown — episode-boundary logic
-  deliberately doesn't depend on them (see `docs/risks.md`), but
-  `scripts/run_dummy_policy.py --policy idle` through a real quest will
-  reveal them, along with Great Jagras's real monster id (needed to pin
-  target selection exactly).
+**Side infra, done and live-confirmed:**
+- A working **Great Jagras arena quest** (`scripts/patch_arena_quest.py`,
+  patched from a real Nexus mod file) — removes the "chase the monster
+  around the open world" friction from recording sessions.
+- A **quest-start trigger** (`mod_plugins/QuestStartTrigger` C# plugin +
+  `scripts/trigger_quest_start.py`) — starts a hunt without walking to
+  the Handler, confirmed live 2026-09-19. Needed for RL fine-tuning's
+  much higher episode-restart rate.
 
-Recommended order from here: `run_dummy_policy.py --policy idle` (one full
-quest) → `run_dummy_policy.py --policy random` (the crash-resistance
-acceptance test).
-
-**Tool-based action space + moveset graph (branch `tool-action-space`) —
-built and tested offline, NOT verified live yet.** The 8 raw-input
-actions and the 0.2s key-state demo labels are replaced by move-named
-tool calls (`strong_charged_slash(direction, level)`, ...), a Great Sword
-moveset graph transcribed from the Iceborne flowchart that re-roots at
-the latest move, timestamped-event demo recording, and an lmtID-based
-label audit. See `docs/architecture.md`'s "Tool-based action space +
-moveset graph" for the decisions and the live checks still to do
-(`verify-tools`, rebinding keys, `audit-tool-labels` over expert hunts).
+**Not built yet:** Phase 3's imitation-learning training script
+(`training/bootstrap_imitation.py`) was deleted along with the
+connectome brain and hasn't been rebuilt against the new tool-based
+action space. The planned IL→RL fine-tuning technique is
+[Q2RL](https://q2rl.rai-inst.com/) — an early prototype
+(`brain/q_network.py`, done; `training/q_estimation.py`, still tied to
+the deleted connectome brain) is parked pending that IL rebuild.
 
 Offline regression suite (no game, no evdev needed except where noted —
 runs on macOS too):
@@ -88,6 +77,8 @@ for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
   `loader-config.json`, 3 plugins already in `nativePC/plugins/`)
 - LuaEngine: **installed** (`nativePC/plugins/LuaEngine.dll`,
   `Lua/Engine.lua` + `Lua/modules/`) — see `docs/modding_setup.md`.
+- SharpPluginLoader: **installed** (`mod_plugins/QuestStartTrigger`'s C#
+  plugin builds against it) — see `docs/modding_setup.md`.
 - Desktop: Hyprland (wlroots, Wayland) — `mss`/X11-style capture will not
   work here; using `grim` instead (see `env/game_interface/capture.py`).
 - `/dev/uinput` already has an ACL entry granting the current user rw access
@@ -101,9 +92,9 @@ This machine is NixOS — use the flake, it's the recommended path here:
 nix develop
 ```
 
-Gives you Python with `evdev`/`Pillow` (built properly against the running
-kernel, unlike the `pip`-in-a-venv route — see `docs/risks.md`), plus
-`grim`/`slurp`/`wf-recorder`/`gamescope` on `PATH`.
+Gives you Python with `evdev`/`Pillow`/`pycryptodome` (built properly
+against the running kernel, unlike the `pip`-in-a-venv route — see
+`docs/risks.md`), plus `grim`/`slurp`/`wf-recorder`/`gamescope` on `PATH`.
 
 For a non-Nix machine (e.g. if training ends up running elsewhere), the
 portable fallback is still:
@@ -121,8 +112,7 @@ pip install -r requirements.txt
    single-player too, LuaEngine repurposes the local text box as a command
    console) and run `reload state_reader`. (If you ever edit
    `lua_scripts/state_reader.lua`, re-copy it into the game's `Lua/`
-   folder first — it's not symlinked, the game reads its own copy. The
-   `tool-action-space` branch changed it: re-copy once before recording.)
+   folder first — it's not symlinked, the game reads its own copy.)
 3. Confirm state is flowing: `nix run .#verify-state-read` — should
    stream a fresh player/monster/quest snapshot every second. `Ctrl-C` to
    stop.
@@ -148,7 +138,12 @@ nix run .#record-hunt   # zero args needed — defaults to the pilot pair + this
 nix run .#verify-tools  # live check of each move via its shortest combo path (--chain a,b,c)
 nix run .#audit-tool-labels   # demo labels + moveset graph vs the game's own lmtIDs
 nix run .#relabel-demos       # re-label recorded episodes after a graph/timing change
+nix run .#patch-arena-quest -- --source ... --output ... --quest-id 90099  # see docs/architecture.md
 ```
+
+`scripts/trigger_quest_start.py` doesn't have a `nix run` app yet — invoke
+it directly inside `nix develop`: `python scripts/trigger_quest_start.py
+--quest-id 90099`.
 
 `nix develop` is still there for anything not wrapped as an app yet (e.g.
 the `tests/` suite, or ad-hoc `python -c "..."` checks).

@@ -1,5 +1,5 @@
 {
-  description = "fly-mhw: teaching an agent to hunt in Monster Hunter World from pixels";
+  description = "mhw-rl: teaching an agent to hunt in Monster Hunter World from pixels";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -58,7 +58,7 @@
           ];
 
           shellHook = ''
-            echo "fly-mhw dev shell — $(python3 --version)"
+            echo "mhw-rl dev shell — $(python3 --version)"
             echo "Try: python scripts/verify_state_read.py"
             echo "     python scripts/verify_input_injection.py"
           '';
