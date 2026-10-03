@@ -84,7 +84,14 @@ nodes:
   # measured expiry the tracker uses.
   - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120},
      duration_s: 1.5, combo_window_s: 0.9, full_animation_s: 2.56,
-     lmt_ids: {lv0: 49276, lv1: 49304, lv2: 49305, lv3: 49306}, verified: live}
+     # lv0 is deliberately ABSENT. 49276 was recorded as lv0 earlier,
+     # but it is the charge WINDUP pose, not a swing: an uncharged tap
+     # logs 49276 -> 49304, i.e. the same swing a lv1 charge produces.
+     # So the animation cannot distinguish lv0 from lv1 and labelling
+     # falls back to hold duration for that one distinction. (49276 is
+     # also in move_probe.NOISE_IDS, so it could never have been
+     # attributed anyway — the two were contradicting each other.)
+     lmt_ids: {lv1: 49304, lv2: 49305, lv3: 49306}, verified: live}
   # REQUIRES FORWARD HELD (user, 2026-10-02): a follow-up charge with no
   # direction held produces the Side Blow instead — confirmed live, the
   # no-direction chain gave 49284 (side_blow_1) where holding forward
@@ -101,7 +108,7 @@ nodes:
   # Slash. So duration_s targets the middle of 1.8-2.8.
   - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131},
      duration_s: 2.2, combo_window_s: 0.6, full_animation_s: 3.18,
-     lmt_ids: {lv1: 49307}, verified: partial}
+     lmt_ids: {lv1: 49307, lv2: 49308, lv3: 49309}, verified: live}
   # lv1 id measured live 2026-10-02 at the end of a full
   # CS -> SCS -> TCS chain with forward held, and the user visually
   # CONFIRMED the True Charged Slash actually played. That confirmation
@@ -110,7 +117,11 @@ nodes:
   # seen the move happen. (Requires forward held, same as the SCS.)
   - {id: true_charged_slash, move: true_charged_slash, duration_s: 3.0, returns_to: neutral,
      motion_values: {lv1: "15+120 / power 144", lv2: "20+175 / power 210", lv3: "22+211 / power 264"},
-     lmt_ids: {lv1: 49341}, verified: partial,
+     # lv2 is NOT recorded: that probe returned 49167 after only 0.76s
+     # where every other TCS ran 6.09s, so it was an interrupted or
+     # different move, not a lv2 True Charged Slash. Left out rather
+     # than guessed.
+     lmt_ids: {lv1: 49341, lv3: 49342}, verified: live,
      notes: "Chart: -> Neutral. Power version triggers when hit on a weak spot."}
   # 49299 measured live 2026-10-02. Getting here took a fix: the tackle
   # only registers once the charge has run ~1s (see
@@ -122,7 +133,12 @@ nodes:
   # so share this animation; the graph position disambiguates them, not
   # the id (same situation as rising_slash / rising_slash_1).
   - {id: tackle_1, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
-     lmt_ids: {default: 49299}, verified: live,
+     # Per charge level, not a single id: the user confirmed the tackle
+     # can be thrown at any point while charging, so the charge level it
+     # interrupts is a real property of the move. lv0 and lv1 share
+     # 49299 (the tackle needs ~1s of charge to come out at all, so
+     # there is no genuinely uncharged variant).
+     lmt_ids: {lv0: 49299, lv1: 49299, lv2: 49343, lv3: 49344}, verified: live,
      notes: "Chart top-left Tackle: 'Y+B (during Charge 1) or Y after dodge'. MV depends on charge level."}
   - {id: tackle_2, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
      notes: "Chart: Y+B during Charge 2."}

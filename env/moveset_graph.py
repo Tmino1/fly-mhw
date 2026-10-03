@@ -296,7 +296,7 @@ class MovesetGraph:
             for finish, fin_edge in self._own.get(target.id, {}).items()
         ]
 
-    def shortest_path_to(self, move: str) -> Optional[list["Option"]]:
+    def shortest_path_to(self, move: str, args: Optional[dict] = None) -> Optional[list["Option"]]:
         """BFS over combo roots from the graph root to the first node
         whose move is `move`, using declared (non-re-rooting) edges only.
 
@@ -316,7 +316,24 @@ class MovesetGraph:
                 if opt.rerooted:
                     continue
                 if opt.move == move:
-                    return path + [opt]
+                    # Honour the caller's args on the TARGET move. Several
+                    # options can reach the same move with different
+                    # pinned args — charged_slash is reachable both by a
+                    # y_tap edge that pins level: lv0 and by a y_hold that
+                    # takes any level. Returning the first match regardless
+                    # made every charged_slash probe run as lv0, so all
+                    # four charge levels reported the same animation.
+                    # Only checks that the edge's PINNED args don't
+                    # conflict with what was asked for. Deliberately not
+                    # accepts_args(), which also enforces
+                    # requires_direction — a caller selecting a charge
+                    # level shouldn't have to satisfy the forward-held
+                    # requirement just to find the path.
+                    if args is None or all(
+                        opt.fixed_args.get(k, v) == v for k, v in args.items()
+                    ):
+                        return path + [opt]
+                    continue
                 nxt = self.nodes[opt.to]
                 nxt_root = nxt.returns_to or nxt.id
                 if nxt_root not in seen:

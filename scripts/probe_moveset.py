@@ -119,7 +119,13 @@ def _ready_to_probe(log: ActionLog, ex: ToolExecutor, ts: ToolSet, current_id, s
 
 def probe_move(ex: ToolExecutor, ts: ToolSet, log: ActionLog, move: str,
                level: str, direction: str, settle: float, current_id) -> ProbeResult:
-    path = ts.graph.shortest_path_to(move)
+    # Filter the path by LEVEL only. Direction must not filter here: an
+    # edge that requires a direction (the SCS/TCS need forward) would
+    # reject the probe's default "none" and report the move unreachable.
+    # The direction an edge requires is honoured below when building args.
+    spec0 = ts.spec(move)
+    want = {"level": level} if "level" in spec0.arg_names else None
+    path = ts.graph.shortest_path_to(move, want)
     if path is None:
         return ProbeResult(move, [], None, fired=False, note="no declared path from neutral")
 
