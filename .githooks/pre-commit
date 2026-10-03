@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Blocks a commit whose offline test suite doesn't pass.
+#
+# Added 2026-10-02 after a commit went in without the suite being run. The
+# tests take ~2s and need no game, no evdev and no network, so there is no
+# good reason to skip them — but "I'll remember" demonstrably isn't one.
+#
+# Enable (once per clone, since git doesn't ship hooks in a checkout):
+#     git config core.hooksPath .githooks
+#
+# Bypass for a genuine emergency: git commit --no-verify
+#
+# NOTE what this does and doesn't buy you: it proves nothing else broke.
+# It does NOT prove new code is correct — scripts/ has no offline coverage
+# at all, so a change there can pass this and still be wrong. Live
+# verification is still the evidence for anything that drives the game.
+
+set -uo pipefail
+
+# Prefer the project venv (it has PyYAML and Pillow); fall back to python3
+# so the hook still runs on a machine that hasn't made one yet.
+if [ -x ".venv/bin/python" ]; then
+    PY=".venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+    PY="python3"
+else
+    echo "pre-commit: no python found — skipping tests (commit allowed)" >&2
+    exit 0
+fi
+
+shopt -s nullglob
+tests=(tests/test_*.py)
+if [ ${#tests[@]} -eq 0 ]; then
+    echo "pre-commit: no tests found — nothing to check" >&2
+    exit 0
+fi
+
+failed=()
+for t in "${tests[@]}"; do
+    if ! out=$("$PY" "$t" 2>&1); then
+        failed+=("$t")
+        printf '\n--- %s ---\n%s\n' "$t" "$(printf '%s\n' "$out" | tail -20)"
+        continue
+    fi
+    # These suites print "N failure(s)." and still exit 0 in some paths, so
+    # trust the text as well as the exit code.
+    if printf '%s' "$out" | grep -qE '^\[FAIL\]|^[1-9][0-9]* failure'; then
+        failed+=("$t")
+        printf '\n--- %s ---\n%s\n' "$t" "$(printf '%s\n' "$out" | grep -E '^\[FAIL\]|failure' | head -20)"
+    fi
+done
+
+if [ ${#failed[@]} -gt 0 ]; then
+    printf '\npre-commit: BLOCKED — %d test file(s) failing:\n' "${#failed[@]}" >&2
+    printf '  %s\n' "${failed[@]}" >&2
+    printf '\nFix them, or bypass deliberately with: git commit --no-verify\n' >&2
+    exit 1
+fi
+
+echo "pre-commit: ${#tests[@]} test files pass"
+exit 0
