@@ -39,7 +39,19 @@ roles:
   # changes state but does NOT return on release, so it is something else;
   # don't swap these without re-testing.
   rt: BTN_EXTRA
-  rb: null
+  # Sprint. Reported by the user 2026-10-03, not captured by the
+  # calibration script, so the LEFT shift is an assumption — re-run
+  # scripts/calibrate_keyboard_bindings.py if sprint turns out to be
+  # bound to the right one. Binding it means a sprint press is flagged
+  # `unrepresentable` in a demo instead of vanishing: `sprint` is a
+  # reachable: false node in the moveset graph (it sheathes the weapon),
+  # so the agent can't do it, but a human doing it must be visible in
+  # the data rather than silently absorbed into a neighbouring label.
+  rb: KEY_LEFTSHIFT
+  # Slinger. STILL UNBOUND, and now blocking less than it was: the
+  # clutch claw / slinger action-space expansion was DECIDED on
+  # 2026-10-03 (needed for harder monsters), so these stop being
+  # "flag and drop" and become real actions. See docs/architecture.md.
   lt: null
 mouse:
   counts_small: 60

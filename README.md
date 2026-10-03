@@ -85,11 +85,17 @@ hunt unrecoverable by the relabeler.
 
 ### Known gaps
 
-- **`rb` (sprint) and `lt` (slinger) are unbound**, so those presses are
-  invisible to the recorder rather than flagged unrepresentable. Slinger
-  and clutch-claw use during a recording gets absorbed into neighbouring
-  labels — mild training-data pollution. Bind them, or avoid those moves
-  while recording.
+- **`lt` (slinger) is unbound, and clutch claw has no role at all**, so
+  using either during a recording gets absorbed into a neighbouring
+  label rather than flagged — mild, invisible training-data pollution.
+  For demos intended for the FIRST training pass, avoid both.
+  (`rb`/sprint is bound as of 2026-10-03 and is flagged correctly.)
+- **The clutch claw / slinger action-space expansion is DECIDED but not
+  scheduled** (2026-10-03): the clutch claw is close to required on
+  harder monsters, so an agent without it is capped at easy targets.
+  It's a staged v2 — a second demo batch recorded with the new moves,
+  then warm-start fine-tuning on the combined set. See
+  `docs/architecture.md`.
 - **Mouse camera thresholds are uncalibrated placeholders**, so camera
   labels may be over/under-counted. Cheap to fix: raw events are kept, so
   `scripts/relabel_demos.py` re-derives labels with no replay.

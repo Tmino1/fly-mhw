@@ -142,8 +142,26 @@ segmenter, label audit) carries over untouched.
   head. The suggested first test is a 2×2 weapon × monster grid with one
   cell held out. Needs deciding before Phase 2 code starts; the "Open"
   items there list what's unresolved.
-- **Whether to expand the Great Sword action space to cover clutch claw
-  and slinger bursts.** Raised 2026-09-19: both are real parts of
+- **Expanding the Great Sword action space to cover clutch claw and
+  slinger bursts — DECIDED 2026-10-03: yes, do it.** The user's reason:
+  the clutch claw is "almost needed for the more challenging monsters",
+  so an agent without it is capped at easy targets regardless of how
+  well it plays the rest of the moveset. That settles the question
+  below, which had been open since 2026-09-19. It is not scheduled yet:
+  the critical path is demo data then the IL trainer, and this expansion
+  is explicitly a staged v2 (see the staged-expansion note further down)
+  — a second demo batch recorded WITH the new moves, then warm-start
+  fine-tuning on the combined dataset.
+
+  Consequence for recording in the meantime: the old advice "don't use
+  clutch claw/slinger during recorded hunts" still holds for any demos
+  meant for the FIRST training pass, because neither has a role or a
+  graph node yet, so those frames get absorbed into neighbouring labels
+  rather than flagged. Confirmed live 2026-10-02 on the first real
+  recording, where slinger and clutch-claw use produced no unlabelled
+  gaps precisely because other calls swallowed them.
+
+  Original framing, retained for context. Raised 2026-09-19: both are real parts of
   high-level Great Sword play (clutch claw wall-bang topples, slinger
   elemental-phial application) and relevant prep for tougher targets like
   Alatreon specifically. Still out of scope in the tool-based action

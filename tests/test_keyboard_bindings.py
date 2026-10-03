@@ -30,11 +30,12 @@ def check(label, ok, detail=""):
 b = KeyboardBindings.from_config(REPO / "configs/keyboard_bindings.yaml")
 check("loads the repo's bindings", b.roles["y"] == "BTN_LEFT" and b.roles["x"] == "KEY_E", str(b.roles))
 check("every role present", set(b.roles) == set(ROLES))
-# rt (guard) was bound 2026-10-02 — BTN_EXTRA, identified live by its
-# hold-steady-then-return-on-release animation. rb (sprint) and lt
-# (slinger) are still unbound.
-check("uncalibrated roles reported", {"rb", "lt"} <= set(b.unbound_roles())
-      and "rt" not in b.unbound_roles(), str(b.unbound_roles()))
+# rt (guard) bound 2026-10-02 (BTN_EXTRA, identified live by its
+# hold-steady-then-return-on-release animation); rb (sprint) bound
+# 2026-10-03 (left shift, reported by the user). lt (slinger) is the
+# last one still unbound — see docs/architecture.md's clutch
+# claw / slinger expansion entry.
+check("uncalibrated roles reported", b.unbound_roles() == ["lt"], str(b.unbound_roles()))
 check("tools config reference", b.tools_config == "configs/weapons/greatsword_tools.yaml")
 check("mouse thresholds", b.mouse.get("counts_small") and b.mouse.get("counts_large"))
 
