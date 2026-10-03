@@ -96,8 +96,13 @@ def probe_move(ex: ToolExecutor, ts: ToolSet, log: ActionLog, move: str,
     # probed (seen live — the Side Blow was recorded with the Charged
     # Slash's id that way). `settle` is only the fallback cap.
     if not log.wait_for_idle(IDLE_IDS, current_id, timeout=settle + 8.0):
-        return ProbeResult(move, [], None, fired=False,
-                           note="character never returned to idle; skipped")
+        # Do NOT just skip this move. If the character is stuck in some
+        # state, every later probe inherits it and silently measures the
+        # wrong thing — observed live: a run that continued past one such
+        # failure reported guard as 49263 and kick as 49299, when guard
+        # had already been measured twice as 49159. Results shifted by a
+        # whole move. Unknown state poisons the rest of the run, so stop.
+        return ProbeResult(move, [], None, fired=False, note="NOT-IDLE-ABORT")
     ex.tracker = MovesetTracker(ts.graph, time.monotonic())
     log.clear()
 
@@ -184,6 +189,13 @@ def main() -> None:
                 print("\n!! MHW lost focus — stopping. Results so far are still valid.", flush=True)
                 break
             r = probe_move(ex, ts, log, move, level, args.direction, args.settle, current_id)
+            if r.note == "NOT-IDLE-ABORT":
+                print(f"\n!! {move}: character never returned to idle — aborting the run.",
+                      flush=True)
+                print("   Anything measured after an unknown state is untrustworthy.",
+                      flush=True)
+                results.append(r)
+                break
             label = f"{move}({level})" if len(jobs) > len(names) else move
             dur = f"{r.full_animation_s:5.2f}s" if r.full_animation_s else "    ?"
             print(f"  {label:34s} lmt={str(r.lmt_id):>8}  {dur}  "
@@ -192,6 +204,23 @@ def main() -> None:
             results.append(r)
 
     print("\n=== summary ===")
+    # A result that disagrees with an id already in the moveset YAML is a
+    # loud signal: either this run was polluted, or the recorded id was
+    # wrong. Both have happened, so never silently prefer the new value.
+    known = {}
+    for node in ts.graph.nodes.values():
+        for lv, lmt in (node.lmt_ids or {}).items():
+            if node.move:
+                known.setdefault(node.move, set()).add(int(lmt))
+    contradictions = [r for r in results
+                      if r.lmt_id is not None and r.move in known
+                      and r.lmt_id not in known[r.move]]
+    if contradictions:
+        print("\nCONTRADICTS the ids already in the moveset YAML — do not copy these in")
+        print("without working out which run was wrong:")
+        for r in contradictions:
+            print(f"  {r.move:28s} probed {r.lmt_id}, recorded {sorted(known[r.move])}")
+
     fired = [r for r in results if r.fired]
     print(f"{len(fired)}/{len(results)} produced an animation")
     missing = [r for r in results if not r.fired]
