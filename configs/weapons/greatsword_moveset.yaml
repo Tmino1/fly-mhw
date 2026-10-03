@@ -124,7 +124,13 @@ nodes:
      notes: "Two boxes on the chart (Y after Charged Slash; RT+Y after the charge-1 Tackle) — one node, same move."}
   - {id: side_blow_2, move: side_blow_2, duration_s: 0.8, motion_values: [18], continues_as: wide_slash,
      notes: "Chart: loop-return to the 'Wide Slash' circle — continue as if after Wide Slash (meaning confirmed by the user)."}
-  - {id: rising_slash, move: rising_slash, motion_values: [38]}
+  # 49259 measured live 2026-10-02 and visually CONFIRMED by the user as
+  # the Rising Slash. An earlier probe of this move reported 49453 — that
+  # was slinger aim, because the yb chord (LMB+RMB) was being turned into
+  # a middle click by libinput's middle-button emulation. See
+  # env/game_interface/keyboard_mouse_injector.py.
+  - {id: rising_slash, move: rising_slash, motion_values: [38],
+     lmt_ids: {default: 49259}, verified: live}
   - {id: rising_slash_1, move: rising_slash_1, motion_values: [38]}
   - {id: rising_slash_2, move: rising_slash_2, motion_values: [41], continues_as: wide_slash,
      notes: "Chart: loop-return to the 'Wide Slash' circle."}

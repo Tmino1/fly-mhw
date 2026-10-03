@@ -49,7 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from env.game_interface.action_log import ActionLog  # noqa: E402
 from env.game_interface.keyboard_mouse_injector import open_backend  # noqa: E402
-from env.move_probe import IDLE_IDS, ProbeResult, attribute, conflicts  # noqa: E402
+from env.move_probe import (  # noqa: E402
+    DRAWN_IDLE_IDS, IDLE_IDS, SHEATHED_IDLE_IDS, ProbeResult, attribute, conflicts,
+)
 from env.moveset_graph import MovesetTracker  # noqa: E402
 from env.tool_executor import ToolExecutor  # noqa: E402
 from env.tools import ToolSet  # noqa: E402
@@ -83,6 +85,38 @@ def focus_mhw() -> bool:
     return False
 
 
+def _ready_to_probe(log: ActionLog, ex: ToolExecutor, ts: ToolSet, current_id, settle: float) -> bool:
+    """Get the character to a state an attack probe can actually start
+    from: animation finished, weapon drawn, and no combo still live.
+
+    All three are separate conditions, and treating "animation finished"
+    as sufficient produced two different wrong results live:
+      - after probing `sheathe` the character is idle but SHEATHED, so
+        the next probe's first input is a draw attack rather than the
+        move under test;
+      - the combo window outlives the animation, so an input sent at
+        animation-end can still resolve against the PREVIOUS move's root
+        and perform something else. rising_slash probed as two different
+        ids depending on what ran before it.
+    """
+    if not log.wait_for_idle(IDLE_IDS, current_id, timeout=settle + 8.0):
+        return False
+
+    if current_id() in SHEATHED_IDLE_IDS:
+        # Draw by attacking, then let that attack finish.
+        ex.pad.press(ex.buttons["Y"])
+        time.sleep(ex.timings["tap_seconds"])
+        ex.pad.release(ex.buttons["Y"])
+        if not log.wait_for_idle(DRAWN_IDLE_IDS, current_id, timeout=12.0):
+            return False
+
+    # Outlast the longest combo window in the graph so the game is at
+    # neutral, not merely standing still.
+    longest = max((n.duration_s + n.combo_window_s) for n in ts.graph.nodes.values())
+    time.sleep(min(longest, 4.0))
+    return current_id() in DRAWN_IDLE_IDS
+
+
 def probe_move(ex: ToolExecutor, ts: ToolSet, log: ActionLog, move: str,
                level: str, direction: str, settle: float, current_id) -> ProbeResult:
     path = ts.graph.shortest_path_to(move)
@@ -95,7 +129,7 @@ def probe_move(ex: ToolExecutor, ts: ToolSet, log: ActionLog, move: str,
     # the wrong root and perform a different move than the one being
     # probed (seen live — the Side Blow was recorded with the Charged
     # Slash's id that way). `settle` is only the fallback cap.
-    if not log.wait_for_idle(IDLE_IDS, current_id, timeout=settle + 8.0):
+    if not _ready_to_probe(log, ex, ts, current_id, settle):
         # Do NOT just skip this move. If the character is stuck in some
         # state, every later probe inherits it and silently measures the
         # wrong thing — observed live: a run that continued past one such
@@ -103,6 +137,7 @@ def probe_move(ex: ToolExecutor, ts: ToolSet, log: ActionLog, move: str,
         # had already been measured twice as 49159. Results shifted by a
         # whole move. Unknown state poisons the rest of the run, so stop.
         return ProbeResult(move, [], None, fired=False, note="NOT-IDLE-ABORT")
+
     ex.tracker = MovesetTracker(ts.graph, time.monotonic())
     log.clear()
 

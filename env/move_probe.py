@@ -16,7 +16,15 @@ from typing import Any, Optional
 # still, running because a direction is held (SCS/TCS need forward), or
 # the charge-hold pose while the button is down. Measured live
 # 2026-10-02; extend as more are identified rather than guessing ranges.
-IDLE_IDS = frozenset({49153})
+# Weapon DRAWN and standing still — the state every attack probe must
+# start from.
+DRAWN_IDLE_IDS = frozenset({49153})
+# Weapon sheathed and standing still. Also "idle", but NOT ready to probe
+# an attack: the first attack input from here is a draw attack, not the
+# move being probed. Probing `sheathe` leaves the character in exactly
+# this state, which silently broke the run that followed it.
+SHEATHED_IDLE_IDS = frozenset({1, 62, 63})
+IDLE_IDS = DRAWN_IDLE_IDS | SHEATHED_IDLE_IDS
 NOISE_IDS = frozenset({
     49402,   # running (a direction key held)
     49276,   # Great Sword charge-hold / uncharged release pose
