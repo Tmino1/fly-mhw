@@ -5,6 +5,42 @@ over from the initial roadmap, plus what Phase 0 has already turned up.
 
 ## Open
 
+- **The virtual gamepad does not reach MHW on this setup — input
+  injection must use keyboard/mouse instead (2026-10-02).** Confirmed
+  live, after exhausting the gamepad path. The pad is created correctly
+  (`udevadm` shows `ID_INPUT_JOYSTICK=1`, `js0` appears, a direct evdev
+  read-back shows clean press/release pairs), Steam Input is off both
+  globally and for appid 582010, and with `PROTON_PREFER_SDL=1` Proton
+  even registers it in the Wine prefix as a real XInput device
+  (`HID\VID_045E&PID_028E&XI_00\...` in `pfx/system.reg`, timestamped to
+  the launch) — and MHW still ignores every button and axis. Two
+  independent obstacles were found and neither fully explains it alone:
+  (1) MHW runs inside a Steam Linux Runtime (pressure-vessel) sandbox
+  whose `/dev/input` is a **static snapshot taken at launch**, so a pad
+  created after the game starts is invisible to it no matter how long
+  it's held open — check with `ls /proc/<game pid>/root/dev/input/`;
+  (2) a `uinput` device has **no `hidraw` node**, and modern Proton's
+  `winebus.sys` prefers the hidraw backend for gamepads. Both were
+  worked around (pad created before launch, `PROTON_PREFER_SDL=1`) and
+  the game still didn't respond.
+  **Keyboard and mouse injection work perfectly** and were confirmed the
+  same session: a plain `uinput` keyboard moved the character in all
+  four directions (correctly antiparallel W/S and A/D, axes
+  perpendicular), and a `uinput` mouse's `BTN_LEFT` held 2.5s produced a
+  real charged slash (`lmt_id` 62 → 49254 `fsm` 85 charging → 49306
+  `fsm` 65 on release). That path goes uinput → libinput → Hyprland →
+  XWayland → MHW, bypassing the HID/XInput/container problem entirely.
+  It also matches how the human actually plays and how demos are already
+  recorded (`configs/keyboard_bindings.yaml`), removing a
+  human-demos-on-keyboard / agent-on-gamepad mismatch that was always
+  latent. **Consequence:** `env/game_interface/input_injector.py`'s
+  `VirtualGamepad` and the `gamepad:` block in
+  `configs/weapons/greatsword_tools.yaml` need a keyboard/mouse backend
+  before the tool-based action space can be driven live. Two caveats
+  that cost real time here and must be respected by any live test:
+  MHW ignores input entirely when its window isn't focused, and the
+  virtual device needs ~1.5s after creation before the compositor
+  routes its events.
 - **Target selection is heuristic, not exact.** `GetAllMonster()` returns
   every live monster entity, so `configs/monsters/great_jagras.yaml` uses
   `highest_max_health` + a `min_health_max: 1000` floor to separate the
