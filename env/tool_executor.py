@@ -149,7 +149,14 @@ class ToolExecutor:
         elif input == "y_hold":
             self._aim(direction)
             self._press("Y")
-            self.sleep(self.charge_hold_seconds(args["level"]))
+            hold = self.charge_hold_seconds(args["level"])
+            if finish == "tackle":
+                # A tackle needs the charge to have run ~1s before the B
+                # tap registers; at the plain lv1 hold (0.55s) the tap is
+                # ignored and the charge just releases as a Charged Slash
+                # — silently the wrong move. Measured live 2026-10-02.
+                hold = max(hold, t.get("tackle_min_charge_seconds", 1.0))
+            self.sleep(hold)
             if finish == "tackle":
                 commit = self.clock()
                 self._tap("B", t["tackle_tap_seconds"])

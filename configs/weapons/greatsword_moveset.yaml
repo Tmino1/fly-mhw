@@ -47,8 +47,10 @@ nodes:
   # --- chain roots -----------------------------------------------------
   - {id: neutral, kind: root}
   - {id: dodge_out, kind: root, move: dodge, duration_s: 0.6, combo_window_s: 0.8,
+     lmt_ids: {default: 49163}, verified: probe,
      notes: "Chart: 'While attacking, dodging always available' -> Dodge out."}
   - {id: sheathed, kind: root, move: sheathe, continues_as: neutral,
+     lmt_ids: {default: 49155}, verified: probe,
      notes: "Not on the chart. Treated like neutral for follow-ups (a Y from sheathed is a draw attack)."}
 
   # --- held-charge states (never roots) --------------------------------
@@ -110,7 +112,17 @@ nodes:
      motion_values: {lv1: "15+120 / power 144", lv2: "20+175 / power 210", lv3: "22+211 / power 264"},
      lmt_ids: {lv1: 49341}, verified: partial,
      notes: "Chart: -> Neutral. Power version triggers when hit on a weak spot."}
+  # 49299 measured live 2026-10-02. Getting here took a fix: the tackle
+  # only registers once the charge has run ~1s (see
+  # timings.tackle_min_charge_seconds), and at the shorter lv1 hold the B
+  # tap was ignored and the charge released as a plain Charged Slash —
+  # so `tackle` was silently returning 49304, the Charged Slash's id.
+  # Only the probe's duplicate-id check caught that.
+  # tackle_2 and tackle_b are the same move at other combo positions and
+  # so share this animation; the graph position disambiguates them, not
+  # the id (same situation as rising_slash / rising_slash_1).
   - {id: tackle_1, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
+     lmt_ids: {default: 49299}, verified: live,
      notes: "Chart top-left Tackle: 'Y+B (during Charge 1) or Y after dodge'. MV depends on charge level."}
   - {id: tackle_2, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
      notes: "Chart: Y+B during Charge 2."}
@@ -123,6 +135,7 @@ nodes:
      lmt_ids: {default: 49284}, verified: partial,
      notes: "Two boxes on the chart (Y after Charged Slash; RT+Y after the charge-1 Tackle) — one node, same move."}
   - {id: side_blow_2, move: side_blow_2, duration_s: 0.8, motion_values: [18], continues_as: wide_slash,
+     lmt_ids: {default: 49421}, verified: probe,
      notes: "Chart: loop-return to the 'Wide Slash' circle — continue as if after Wide Slash (meaning confirmed by the user)."}
   # 49259 measured live 2026-10-02 and visually CONFIRMED by the user as
   # the Rising Slash. An earlier probe of this move reported 49453 — that
@@ -131,16 +144,26 @@ nodes:
   # env/game_interface/keyboard_mouse_injector.py.
   - {id: rising_slash, move: rising_slash, motion_values: [38],
      lmt_ids: {default: 49259}, verified: live}
-  - {id: rising_slash_1, move: rising_slash_1, motion_values: [38]}
+  # Same animation as rising_slash (user-confirmed): a Rising Slash is
+  # the same swing wherever it lands in the combo. The id therefore does
+  # NOT distinguish these two nodes — labelling must use the graph
+  # position, which is exactly what demos/labeling.py already keys on.
+  - {id: rising_slash_1, move: rising_slash_1, motion_values: [38],
+     lmt_ids: {default: 49259}, verified: live}
   - {id: rising_slash_2, move: rising_slash_2, motion_values: [41], continues_as: wide_slash,
+     lmt_ids: {default: 49423}, verified: probe,
      notes: "Chart: loop-return to the 'Wide Slash' circle."}
-  - {id: wide_slash, move: wide_slash, motion_values: {base: 26, from_scs_lv2: 29}}
+  - {id: wide_slash, move: wide_slash, motion_values: {base: 26, from_scs_lv2: 29},
+     lmt_ids: {default: 49258}, verified: live}
   - {id: strong_wide_slash, move: strong_wide_slash, continues_as: wide_slash,
      motion_values: {lv1: 59, lv2: 66, lv3: 78},
+     lmt_ids: {default: 49310}, verified: probe,
      notes: "MV depends on the preceding SCS level. Chart: loop-return to the 'Wide Slash' circle."}
-  - {id: jumping_wide_slash, move: jumping_wide_slash, motion_values: {lv1: 75, lv2: 96, lv3: 118}}
-  - {id: guard, move: guard, duration_s: 0.0}
-  - {id: kick, move: kick, duration_s: 0.6, motion_values: [5]}
+  - {id: jumping_wide_slash, move: jumping_wide_slash, motion_values: {lv1: 75, lv2: 96, lv3: 118},
+     lmt_ids: {default: 49300}, verified: probe}
+  - {id: guard, move: guard, duration_s: 0.0, lmt_ids: {default: 49159}, verified: live}
+  - {id: kick, move: kick, duration_s: 0.6, motion_values: [5],
+     lmt_ids: {default: 49263}, verified: live}
 
   # --- on the chart, but not reachable by any v1 tool ------------------
   # Environment-dependent (slopes/ledges) or deliberately excluded
