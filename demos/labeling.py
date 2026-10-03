@@ -28,17 +28,29 @@ from .tool_segmenter import KeyEvent, MouseMotion, label_moves, segment_inputs
 LMT_TAIL_SECONDS = 0.6
 
 
+# A move with no charge levels records its animation under this key. It
+# identifies the MOVE, not a level, so it must never be read back as one.
+NO_LEVEL_KEY = "default"
+
+
 def level_lookup(toolset: ToolSet) -> dict[str, dict[int, str]]:
     """move -> {observed lmt_id: charge level}, from the moveset graph's
-    measured `lmt_ids`. Only moves that have been measured live appear."""
+    measured `lmt_ids`.
+
+    Entries keyed NO_LEVEL_KEY are skipped: they pin the move's animation
+    but say nothing about a charge level, and feeding that key back as a
+    level crashed labelling on the very first real recording
+    (`tackle(level='default')` is not a valid call, and the crash landed
+    AFTER the hunt had been played).
+    """
     out: dict[str, dict[int, str]] = {}
     for node in toolset.graph.nodes.values():
         if not node.lmt_ids or not node.move:
             continue
         out.setdefault(node.move, {}).update(
-            {int(lmt): lv for lv, lmt in node.lmt_ids.items()}
+            {int(lmt): lv for lv, lmt in node.lmt_ids.items() if lv != NO_LEVEL_KEY}
         )
-    return out
+    return {move: ids for move, ids in out.items() if ids}
 
 
 def level_from_lmt(move: str, observed: list[int], lookup: dict[str, dict[int, str]]) -> Optional[str]:
@@ -129,7 +141,15 @@ def label_episode(episode_dir: str | Path, toolset: ToolSet, mouse_cfg: dict[str
                     rec["level_source"] = "duration"
                 else:
                     rec["level_source"] = "lmt"
-                    if observed != guessed:
+                    allowed = toolset.spec(label.call.name).arg_values("level")
+                    if observed not in allowed:
+                        # Shouldn't happen now NO_LEVEL_KEY is filtered,
+                        # but a bad id in the YAML must degrade to the
+                        # duration guess, never crash a hunt already
+                        # played. Losing a label beats losing the episode.
+                        rec["level_source"] = "duration"
+                        rec["level_lmt_rejected"] = observed
+                    elif observed != guessed:
                         level_corrections += 1
                         rec["level_from_duration"] = guessed
                         args = dict(label.call.arg_dict)

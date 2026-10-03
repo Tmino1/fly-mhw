@@ -297,7 +297,23 @@ class DemoRecorder:
             flush_events()
 
         ended_at = time.time()
-        labels = label_episode(episode_dir, self.toolset, self.mouse_cfg, t_begin=started_at, t_end=ended_at)
+        # Label inside a try: a hunt you already played must never be lost
+        # to a labelling bug. The first real recording crashed here (a
+        # move with no charge levels fed its `default` id back as one) and
+        # the episode was left with no episode_meta.json, so it didn't even
+        # look like a v2 episode to scripts/relabel_demos.py — the one tool
+        # that could have fixed it without replaying. Raw events are the
+        # ground truth; labels are derived and always re-derivable, so a
+        # labelling failure is recorded and moved past, not raised.
+        try:
+            labels = label_episode(episode_dir, self.toolset, self.mouse_cfg,
+                                   t_begin=started_at, t_end=ended_at)
+        except Exception as exc:
+            labels = {"error": f"{type(exc).__name__}: {exc}"}
+            print(f"  !! labelling failed: {exc}", flush=True)
+            print("     The episode and its raw events are intact. Fix the cause, then:",
+                  flush=True)
+            print(f"     python scripts/relabel_demos.py {episode_dir}", flush=True)
         summary = EpisodeSummary(
             episode_id=episode_id,
             frame_count=step,

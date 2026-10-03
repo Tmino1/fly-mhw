@@ -137,5 +137,42 @@ with tempfile.TemporaryDirectory() as tmp:
     check("unknown ids fall back to duration",
           recs and recs[0].get("level_source") == "duration", str(recs[:1]))
 
+# A move with no charge levels records its id under the "default" key.
+# That key names the MOVE, not a level, and feeding it back as one
+# crashed labelling on the first real recording — after the hunt had
+# been played — with tackle(level='default'). Levels are only ever read
+# from keys that are real level values.
+with tempfile.TemporaryDirectory() as tmp:
+    ep = Path(tmp)
+    with (ep / "frames.jsonl").open("w") as f:
+        for i in range(21):
+            f.write(json.dumps({"step": i, "t": T0 + 0.2 * i, "frame": f"frame_{i:06d}.png"}) + "\n")
+    # a Y hold long enough to reach a charge, then B during it -> tackle
+    events = press("y", 0.05, 1.5) + press("b", 1.2, 1.35)
+    with (ep / "input_events.jsonl").open("w") as f:
+        for e in sorted(events, key=lambda e: e["t"]):
+            f.write(json.dumps(e) + "\n")
+    # 49299 is the tackle's measured id, recorded under "default"
+    with (ep / "lmt_events.jsonl").open("w") as f:
+        f.write(json.dumps({"lmt_id": 49299, "fsm": 0, "t_arrival": T0 + 1.4}) + "\n")
+
+    try:
+        label_episode(ep, ts, {"counts_small": 60, "counts_large": 400})
+        ok = True
+    except Exception as exc:
+        ok = False
+        detail = f"{type(exc).__name__}: {exc}"
+    check("a default-keyed lmt id doesn't crash labelling", ok,
+          "" if ok else detail)
+    if ok:
+        recs = [r for r in read_jsonl(ep / "tool_calls.jsonl") if r.get("call")]
+        lvl = [r["call"]["args"].get("level") for r in recs if "level" in r["call"].get("args", {})]
+        check("levels stay valid values", all(v in ("lv0", "lv1", "lv2", "lv3") for v in lvl), str(lvl))
+
+from demos.labeling import level_lookup  # noqa: E402
+lk = level_lookup(ts)
+check("level lookup excludes default-keyed ids",
+      all("default" not in d.values() for d in lk.values()), str(lk))
+
 print(f"\n{failures} failure(s).")
 sys.exit(1 if failures else 0)
