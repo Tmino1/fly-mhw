@@ -153,5 +153,19 @@ try:
 except ValueError:
     check("bad edge rejected", True)
 
+# Direction-gated edges: the Great Sword's SCS/TCS need forward HELD.
+# Without it the game produces a Side Blow, so the move must be MASKED
+# rather than sent and silently come out as something else
+# (confirmed live 2026-10-02: no direction -> 49284 side_blow_1,
+# forward held -> 49307 SCS).
+tr = MovesetTracker(g)
+tr.advance_input("y_hold", "release", 0.0, 0.5)          # charged_slash
+scs_none = tr.move_options("strong_charged_slash", {"direction": "none", "level": "lv1"}, 1.0)
+scs_fwd = tr.move_options("strong_charged_slash", {"direction": "forward", "level": "lv1"}, 1.0)
+check("SCS masked without forward held", scs_none == [], str(scs_none))
+check("SCS available with forward held", len(scs_fwd) == 1, str(scs_fwd))
+check("the side blow is NOT direction-gated",
+      len(tr.move_options("side_blow_1", {"direction": "none"}, 1.0)) == 1)
+
 print(f"\n{failures} failure(s).")
 sys.exit(1 if failures else 0)

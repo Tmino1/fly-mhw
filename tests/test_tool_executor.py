@@ -98,11 +98,12 @@ check("aim set before the button", pad.log.index(("axis", LY, -32767)) < pad.log
 check("rest after", rest_ok(pad))
 
 # 2. The charge chain: each strong/true charged slash is a Y hold, and the
-#    tracker follows along
+#    tracker follows along. SCS/TCS need FORWARD held — without it the
+#    game gives a Side Blow, so they're masked (see test_moveset_graph).
 ex, pad, clock = make()
 ex.run(ts.call("charged_slash", direction="none", level="lv1"))
-ex.run(ts.call("strong_charged_slash", direction="none", level="lv2"))
-r = ex.run(ts.call("true_charged_slash", direction="none", level="lv3"))
+ex.run(ts.call("strong_charged_slash", direction="forward", level="lv2"))
+r = ex.run(ts.call("true_charged_slash", direction="forward", level="lv3"))
 check("charge chain reaches TCS", r.transition.move == "true_charged_slash" and r.transition.depth == 3,
       str(r.transition.to_dict()))
 check("charge holds use level_seconds", ex.charge_hold_seconds("lv3") in clock.log_sleep

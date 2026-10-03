@@ -89,7 +89,7 @@ check("player lmtID lands in reward_debug only", info["reward_debug"]["player_ac
 
 avail = info["moveset_next"]["available"]
 i = next(k for k, d in enumerate(avail) if d.startswith("y_hold/release"))
-_, _, _, _, info = env.step(RelativeAction(i, {"direction": "none", "level": "lv2"}))
+_, _, _, _, info = env.step(RelativeAction(i, {"direction": "forward", "level": "lv2"}))
 check("relative action follows the chain", info["moveset"]["move"] == "strong_charged_slash", str(info["moveset"]))
 
 _, _, _, _, info = env.step(env.toolset.call("side_blow_1", direction="none"))

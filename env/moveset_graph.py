@@ -71,6 +71,12 @@ class Edge:
     input: str
     to: str
     args: tuple[tuple[str, Any], ...] = ()
+    # Directions this edge needs HELD for the move to come out. Empty
+    # means any direction (including none) is fine. Measured live, not
+    # from the chart: the Great Sword's SCS/TCS need forward held, and
+    # without it the game gives a Side Blow instead — a silently wrong
+    # move, which is exactly what masking is meant to prevent.
+    requires_direction: tuple[str, ...] = ()
     source: str = ""
     verified: bool = False
     notes: str = ""
@@ -110,8 +116,23 @@ class Option:
         rr = " (re-root)" if self.rerooted else ""
         return f"{inp} -> {self.to}{via}{rr}"
 
+    @property
+    def requires_direction(self) -> tuple[str, ...]:
+        out: list[str] = []
+        for e in self.edges:
+            out.extend(e.requires_direction)
+        return tuple(dict.fromkeys(out))
+
     def accepts_args(self, args: dict[str, Any]) -> bool:
-        return all(args.get(k) == v for k, v in self.fixed_args.items())
+        if not all(args.get(k) == v for k, v in self.fixed_args.items()):
+            return False
+        # A direction-gated move is MASKED when the direction isn't held,
+        # rather than sent anyway — sending it would produce a different
+        # move than the caller asked for, with nothing to notice.
+        req = self.requires_direction
+        if req and args.get("direction") not in req:
+            return False
+        return True
 
 
 def _edge_from_raw(raw: dict, default_id: str, from_node: Optional[str] = None) -> Edge:
@@ -121,6 +142,7 @@ def _edge_from_raw(raw: dict, default_id: str, from_node: Optional[str] = None) 
         input=raw["input"],
         to=raw["to"],
         args=tuple(sorted((raw.get("args") or {}).items())),
+        requires_direction=tuple(raw.get("requires_direction") or ()),
         source=raw.get("source", ""),
         verified=raw.get("verified", False),
         notes=raw.get("notes", ""),

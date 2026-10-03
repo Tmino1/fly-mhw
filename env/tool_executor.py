@@ -228,4 +228,29 @@ class ToolExecutor:
         finally:
             self.rest()
         transition = self.tracker.advance(option, t_start, t_commit)
+        self._await_animation(transition, t_commit)
         return ExecResult(call, False, option, transition, t_start, self.clock())
+
+    def _await_animation(self, transition: Transition, t_commit: float) -> None:
+        """Block until the move's animation has played out.
+
+        A follow-up pressed DURING an attack's animation does not chain —
+        it's simply lost, and the combo window only opens once the swing
+        finishes (user, 2026-10-02; measured the same day). Without this
+        wait, back-to-back run() calls fire the next input mid-animation
+        and silently produce a fresh attack instead of the intended
+        chain: a Charged Slash followed at 0.2-0.8s produced another
+        Charged Slash, while 1.1-2.0s produced the Strong Charged Slash.
+
+        Waiting here rather than in the caller means every driver — the
+        env's step(), verify_tools, a future RL loop — gets correct
+        chaining for free, and the combo window the tracker already
+        models (duration_s + combo_window_s) is the window the next call
+        actually lands in.
+        """
+        node = self.tracker.graph.nodes.get(transition.to)
+        if node is None:
+            return
+        remaining = (t_commit + node.duration_s) - self.clock()
+        if remaining > 0:
+            self.sleep(remaining)

@@ -70,11 +70,38 @@ nodes:
   # lmt_ids measured live 2026-10-02 (Y-hold sweep): the charge levels are
   # consecutive ids, so a demo's recorded lmtID pins the level exactly.
   # scripts/audit_tool_labels.py can check labels against these.
+  # duration_s / combo_window_s measured live 2026-10-02 by varying the
+  # gap between a Charged Slash's release and the follow-up press:
+  # 0.2-0.8s produced another Charged Slash (the input was lost inside
+  # the animation), 1.1-2.0s chained, and from ~2.4s the chain had
+  # expired. So the swing runs ~1.0s and the window is open for ~1.0s
+  # after it. The follow-up MUST come after the animation, never during
+  # — env/tool_executor.py waits it out. (That sweep held no direction,
+  # so what it chained INTO was the Side Blow, not the SCS — see the
+  # forward-direction requirement on strong_charged_slash below.)
   - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120},
+     duration_s: 1.0, combo_window_s: 1.0,
      lmt_ids: {lv0: 49276, lv1: 49304, lv2: 49305, lv3: 49306}, verified: live}
-  - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131}}
+  # REQUIRES FORWARD HELD (user, 2026-10-02): a follow-up charge with no
+  # direction held produces the Side Blow instead — confirmed live, the
+  # no-direction chain gave 49284 (side_blow_1) where holding forward
+  # gave 49307. This is NOT yet enforced by the graph; see the
+  # `requires_direction` note in docs/architecture.md.
+  # An earlier commit mistakenly recorded 49284 as this move's lv1 id —
+  # that was the Side Blow. lv1 below is measured with forward held;
+  # lv0/lv2/lv3 are not measured, so labelling falls back to the hold
+  # duration for those.
+  - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131},
+     lmt_ids: {lv1: 49307}, verified: partial}
+  # lv1 id measured live 2026-10-02 at the end of a full
+  # CS -> SCS -> TCS chain with forward held, and the user visually
+  # CONFIRMED the True Charged Slash actually played. That confirmation
+  # matters: the tracker is open-loop and will report a move the game
+  # never performed, so an id is only recorded here once a human has
+  # seen the move happen. (Requires forward held, same as the SCS.)
   - {id: true_charged_slash, move: true_charged_slash, duration_s: 3.0, returns_to: neutral,
      motion_values: {lv1: "15+120 / power 144", lv2: "20+175 / power 210", lv3: "22+211 / power 264"},
+     lmt_ids: {lv1: 49341}, verified: partial,
      notes: "Chart: -> Neutral. Power version triggers when hit on a weak spot."}
   - {id: tackle_1, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
      notes: "Chart top-left Tackle: 'Y+B (during Charge 1) or Y after dodge'. MV depends on charge level."}
@@ -82,7 +109,11 @@ nodes:
      notes: "Chart: Y+B during Charge 2."}
   - {id: tackle_b, move: tackle, duration_s: 0.8, motion_values: {lv1: 26, lv2: 35, lv3: 48},
      notes: "Chart: 'B / Y from kick' Tackle (after Wide Slash or Kick)."}
+  # 49284 measured live 2026-10-02: this is what a post-Charged-Slash
+  # follow-up produces when NO direction is held (holding forward gives
+  # the SCS instead).
   - {id: side_blow_1, move: side_blow_1, duration_s: 0.8, motion_values: [16],
+     lmt_ids: {default: 49284}, verified: partial,
      notes: "Two boxes on the chart (Y after Charged Slash; RT+Y after the charge-1 Tackle) — one node, same move."}
   - {id: side_blow_2, move: side_blow_2, duration_s: 0.8, motion_values: [18], continues_as: wide_slash,
      notes: "Chart: loop-return to the 'Wide Slash' circle — continue as if after Wide Slash (meaning confirmed by the user)."}
@@ -149,7 +180,15 @@ edges:
      notes: "Tentative — user: 'not totally sure, will have to audit edge with expert demonstrations'."}
 
   # Charge 2
-  - {from: charge_2, input: release, to: strong_charged_slash, source: chart}
+  # Forward must be HELD or the game gives a Side Blow instead —
+  # confirmed live 2026-10-02 (no direction: 49284 = side_blow_1;
+  # forward held: 49307 = SCS). Only plain `forward` is confirmed;
+  # the diagonals are untested, so they're left out rather than
+  # assumed — a wrong guess here produces the wrong move silently.
+  # The constraint sits on the RELEASE edge, not the y_hold into
+  # charge_2, so the tackle-out-of-charge option stays unrestricted.
+  - {from: charge_2, input: release, to: strong_charged_slash,
+     requires_direction: [forward], source: live}
   - {from: charge_2, input: tackle, to: tackle_2, source: chart}
 
   # Strong Charged Slash follow-ups
@@ -162,7 +201,10 @@ edges:
      notes: "Chart combo list: 'attack-tackle loop (until TCS)'."}
 
   # Charge 3
-  - {from: charge_3, input: release, to: true_charged_slash, source: chart}
+  # Same forward requirement as the SCS above (confirmed live in the
+  # same full CS -> SCS -> TCS chain).
+  - {from: charge_3, input: release, to: true_charged_slash,
+     requires_direction: [forward], source: live}
 
   # Guard / kick / wide-slash branch
   - {from: guard, input: rt_y, to: kick, source: chart}
