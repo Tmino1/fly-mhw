@@ -53,6 +53,14 @@ class Node:
     returns_to: Optional[str] = None
     reachable: bool = True
     motion_values: Any = None
+    # Observed animation ids for this move, per charge level, e.g.
+    # {lv0: 49276, lv1: 49304, ...}. Measured live, not from the chart —
+    # these are what let demo labelling READ the charge level out of the
+    # recording instead of inferring it from how long a key was held,
+    # which is frame-rate dependent and wrong outright when the Great
+    # Sword auto-releases a full charge on its own.
+    lmt_ids: Optional[dict] = None
+    verified: str = ""
     notes: str = ""
 
 
@@ -166,6 +174,8 @@ class MovesetGraph:
                 returns_to=raw.get("returns_to"),
                 reachable=raw.get("reachable", True),
                 motion_values=raw.get("motion_values"),
+                lmt_ids=raw.get("lmt_ids"),
+                verified=raw.get("verified", ""),
                 notes=raw.get("notes", ""),
             )
             if node.id in nodes:

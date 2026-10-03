@@ -83,5 +83,59 @@ with tempfile.TemporaryDirectory() as tmp:
     check("sequences split into chains", seqs == [["charged_slash", "strong_charged_slash"], ["wide_slash"],
                                                   ["dodge", "tackle"]], str(seqs))
 
+
+
+# --- charge level is READ from the animation id, not the hold duration ---
+# Both cases below are ones the duration heuristic gets wrong in real
+# recordings: a frame-rate dip shifting a hold across a narrow band, and
+# the Great Sword auto-releasing a full charge (so key-up lands after the
+# swing and the measured hold is meaningless). See demos/labeling.py's
+# level_from_lmt().
+with tempfile.TemporaryDirectory() as tmp:
+    ep = Path(tmp)
+    with (ep / "frames.jsonl").open("w") as f:
+        for i in range(61):
+            f.write(json.dumps({"step": i, "t": T0 + 0.2 * i, "frame": f"frame_{i:06d}.png"}) + "\n")
+
+    # A hold of 0.9s: by duration that's lv1 (band 0.3-1.5). The game says
+    # 49305 — lv2. The label must follow the game.
+    # Then, after a long enough gap that the combo window expires (so this
+    # is a fresh charged_slash, not a chained SCS), a 5.0s hold: way past
+    # lv3, so the GS auto-released long before key-up and the measured
+    # hold duration is meaningless. The id still says lv3.
+    events = press("y", 0.05, 0.95) + press("y", 5.0, 10.0)
+    with (ep / "input_events.jsonl").open("w") as f:
+        for e in sorted(events, key=lambda e: e["t"]):
+            f.write(json.dumps(e) + "\n")
+    with (ep / "lmt_events.jsonl").open("w") as f:
+        for t, lmt in [(0.5, 49304), (0.9, 49305), (5.5, 49304), (7.0, 49306)]:
+            f.write(json.dumps({"lmt_id": lmt, "fsm": 0, "t_arrival": T0 + t}) + "\n")
+
+    summary = label_episode(ep, ts, {"counts_small": 60, "counts_large": 400})
+    recs = [r for r in read_jsonl(ep / "tool_calls.jsonl") if r["graph"].get("move")]
+    levels = [(r["call"]["tool"], r["call"]["args"].get("level"), r.get("level_source")) for r in recs]
+    check("level taken from the observed lmt id",
+          levels[0] == ("charged_slash", "lv2", "lmt"), str(levels))
+    check("duration guess kept for comparison", recs[0].get("level_from_duration") == "lv1", str(recs[0]))
+    check("auto-released full charge reads as lv3",
+          any(lv == "lv3" and src == "lmt" for _, lv, src in levels), str(levels))
+    check("corrections counted", summary["level_corrections"] >= 1, str(summary))
+
+# No measured ids for this move -> fall back to the duration guess rather
+# than inventing a level.
+with tempfile.TemporaryDirectory() as tmp:
+    ep = Path(tmp)
+    with (ep / "frames.jsonl").open("w") as f:
+        f.write(json.dumps({"step": 0, "t": T0, "frame": "frame_000000.png"}) + "\n")
+    with (ep / "input_events.jsonl").open("w") as f:
+        for e in sorted(press("y", 0.05, 0.95), key=lambda e: e["t"]):
+            f.write(json.dumps(e) + "\n")
+    with (ep / "lmt_events.jsonl").open("w") as f:
+        f.write(json.dumps({"lmt_id": 999999, "fsm": 0, "t_arrival": T0 + 0.5}) + "\n")
+    label_episode(ep, ts, {"counts_small": 60, "counts_large": 400})
+    recs = [r for r in read_jsonl(ep / "tool_calls.jsonl") if r["graph"].get("move")]
+    check("unknown ids fall back to duration",
+          recs and recs[0].get("level_source") == "duration", str(recs[:1]))
+
 print(f"\n{failures} failure(s).")
 sys.exit(1 if failures else 0)
