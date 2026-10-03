@@ -11,6 +11,11 @@ the executor (combo windows are real — no pauses mid-chain), then asks
 whether that exact sequence played. --chain runs a sequence you name.
 
 Run with MHW focused, weapon drawn, somewhere safe (training area).
+Focus matters literally: MHW ignores injected input entirely when its
+window is not focused (confirmed live 2026-10-02 — it cost an hour of
+false negatives). The device is whatever the tools config's
+input_backend selects; on this machine that is keyboard/mouse, since
+the virtual gamepad never reaches the game (see docs/risks.md).
 
 Usage:
     python scripts/verify_tools.py                          # every tool
@@ -32,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from env.game_interface.input_injector import open_gamepad  # noqa: E402
+from env.game_interface.keyboard_mouse_injector import open_backend  # noqa: E402
 from env.moveset_graph import MovesetTracker, Option  # noqa: E402
 from env.tool_executor import ToolExecutor  # noqa: E402
 from env.tools import ToolSet  # noqa: E402
@@ -111,7 +116,7 @@ def main():
 
     print(f"{len(tests)} test(s). Make sure Monster Hunter World is focused, weapon drawn.\n")
     results = {"confirmed": [], "wrong": [], "skipped": []}
-    with open_gamepad() as pad:
+    with open_backend(toolset) as pad:
         for label, steps in tests:
             print(f"--- {label} ---")
             for call, opt in steps:

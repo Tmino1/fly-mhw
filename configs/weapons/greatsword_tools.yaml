@@ -27,12 +27,48 @@ name: "Great Sword"
 weapon_type_id: 0  # confirmed empirically against player.weapon_type — see docs/risks.md
 moveset: "configs/weapons/greatsword_moveset.yaml"
 
+# The gamepad block is KEPT FOR REFERENCE ONLY — the virtual pad does not
+# reach MHW on this machine (docs/risks.md's open entry has the full
+# evidence: it fails even once Proton registers it as a real XInput
+# device). `input_backend` below selects what actually drives the game.
 gamepad:
   buttons: {Y: BTN_Y, B: BTN_B, A: BTN_A, X: BTN_X}
   left_stick: {x: ABS_X, y: ABS_Y}
   right_stick: {x: ABS_RX, y: ABS_RY}
   right_trigger: {code: ABS_RZ, pressed: 255}
   verified: {Y: true, B: true, A: true, X: false, left_stick: true, right_stick: false, right_trigger: false}
+
+input_backend: keyboard_mouse
+
+# Keyboard/mouse mapping — the backend that actually works (confirmed live
+# 2026-10-02, see env/game_interface/keyboard_mouse_injector.py). Keys come
+# from configs/keyboard_bindings.yaml's roles, which is also what the demo
+# recorder reads, so the agent and the human now press the same things.
+#
+# The stick axes have no keyboard equivalent: VAXIS_MOVE_* becomes WASD
+# holds and VAXIS_CAM_* becomes relative mouse motion. Those names are
+# resolved by the backend, not by evdev.
+keyboard_mouse:
+  buttons: {Y: BTN_LEFT, B: BTN_RIGHT, A: KEY_SPACE, X: KEY_E}
+  move_keys: {forward: KEY_W, back: KEY_S, left: KEY_A, right: KEY_D}
+  left_stick: {x: VAXIS_MOVE_X, y: VAXIS_MOVE_Y}
+  right_stick: {x: VAXIS_CAM_X, y: VAXIS_CAM_Y}
+  # UNBOUND: keyboard_bindings.yaml still has rt: null, so guard, kick and
+  # the RT side blows can't be sent (or recorded) until it's calibrated.
+  # Fill in the real key and set verified.right_trigger once checked live.
+  right_trigger: {code: null, pressed: 1}
+  # Y/B/A are the user's own reported bindings and were exercised live
+  # (BTN_LEFT produced a real charged slash); movement verified in all
+  # four directions. X (sheathe) is the Iceborne chart's default, not
+  # confirmed as this user's binding. Camera scaling is uncalibrated.
+  verified:
+    Y: true
+    B: false
+    A: false
+    X: false
+    move_keys: true
+    right_stick: false
+    right_trigger: false
 
 # Left-stick values per direction. Cardinal values are greatsword.yaml's
 # verified ones (forward = stick up = ABS_Y negative); diagonals are the

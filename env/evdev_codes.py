@@ -41,7 +41,25 @@ def warn_if_compass_alias(name: str) -> bool:
     return True
 
 
+# Virtual axis identifiers used by the keyboard/mouse backend
+# (env/game_interface/keyboard_mouse_injector.py), where a gamepad config
+# would name ABS_X/ABS_RZ/... A keyboard has no absolute axes, so these
+# stand in: VAXIS_MOVE_* becomes WASD key holds and VAXIS_CAM_* becomes
+# relative mouse motion. Negative so they can never collide with a real
+# evdev code, and resolved here — with no evdev import — so a tools config
+# naming them still loads on a machine without evdev.
+VIRTUAL_CODES = {
+    "VAXIS_MOVE_X": -1,
+    "VAXIS_MOVE_Y": -2,
+    "VAXIS_CAM_X": -3,
+    "VAXIS_CAM_Y": -4,
+}
+
+
 def resolve_code(name: str) -> int:
+    if name in VIRTUAL_CODES:
+        return VIRTUAL_CODES[name]
+
     from evdev import ecodes
 
     warn_if_compass_alias(name)

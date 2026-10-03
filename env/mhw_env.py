@@ -80,8 +80,16 @@ class MHWEnv:
         self.step_period_seconds = step_period_seconds
         self.reset_timeout_seconds = reset_timeout_seconds
 
+        # Whichever input device the tools config selects — a gamepad or
+        # a virtual keyboard/mouse. Only the latter actually reaches MHW
+        # on this machine (docs/risks.md), but both present the same
+        # press/release/set_axis surface, so nothing below cares.
         self._owns_gamepad = gamepad is None
-        self.gamepad = gamepad or VirtualGamepad()
+        if gamepad is None:
+            from .game_interface.keyboard_mouse_injector import make_backend
+
+            gamepad = make_backend(self.toolset)
+        self.gamepad = gamepad
         self.executor = ToolExecutor(self.gamepad, self.toolset, self.tracker)
 
         self._prev_state: Optional[GameState] = None

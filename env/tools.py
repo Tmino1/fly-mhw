@@ -88,6 +88,15 @@ class ToolSet:
         self.moveset_path = moveset_path
         self.weapon_type_id: int = data["weapon_type_id"]
         self.gamepad: dict[str, Any] = data["gamepad"]
+        # Which block env/tool_executor.py drives. Defaults to the gamepad
+        # for older configs, but on this machine only keyboard_mouse
+        # actually reaches the game — see docs/risks.md.
+        self.input_backend: str = data.get("input_backend", "gamepad")
+        if self.input_backend not in ("gamepad", "keyboard_mouse"):
+            raise ValueError(f"{self.name}: unknown input_backend {self.input_backend!r}")
+        if self.input_backend == "keyboard_mouse" and "keyboard_mouse" not in data:
+            raise ValueError(f"{self.name}: input_backend is keyboard_mouse but no `keyboard_mouse` block")
+        self.keyboard_mouse: dict[str, Any] = data.get("keyboard_mouse", {})
         self.directions: dict[str, list[int]] = data["directions"]
         self.timings: dict[str, Any] = data["timings"]
         self.segmenter: dict[str, Any] = data.get("segmenter", {})

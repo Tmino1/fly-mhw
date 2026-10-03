@@ -54,6 +54,19 @@ class FakeClock:
 
 ts = ToolSet.from_config(REPO / "configs/weapons/greatsword_tools.yaml")
 
+# Code NAMES come from whichever input block the config selects (the
+# executor is backend-agnostic, and this suite tests its programs, not a
+# particular binding) — so switching input_backend, or rebinding a key,
+# doesn't break these assertions. See docs/risks.md on why the live
+# backend is keyboard_mouse rather than the gamepad.
+IN = ts.keyboard_mouse if ts.input_backend == "keyboard_mouse" else ts.gamepad
+BTN = IN["buttons"]
+LX, LY = IN["left_stick"]["x"], IN["left_stick"]["y"]
+RX, RY = IN["right_stick"]["x"], IN["right_stick"]["y"]
+RT = IN["right_trigger"]["code"]
+RT_PRESSED = IN["right_trigger"]["pressed"]
+STICK_AXES = [a for a in (LX, LY, RX, RY, RT) if a is not None]
+
 
 def make():
     pad, clock = FakePad(), FakeClock()
@@ -73,15 +86,15 @@ def rest_ok(pad):
     for e in pad.log:
         if e[0] == "axis":
             finals[e[1]] = e[2]
-    return all(finals.get(a, 0) == 0 for a in ("ABS_X", "ABS_Y", "ABS_RX", "ABS_RY", "ABS_RZ"))
+    return all(finals.get(a, 0) == 0 for a in STICK_AXES)
 
 
 # 1. wide_slash from neutral resolves to a B tap
 ex, pad, _ = make()
 r = ex.run(ts.call("wide_slash", direction="forward"))
-check("wide_slash from neutral -> B", buttons(pad) == [("press", "BTN_B"), ("release", "BTN_B")]
+check("wide_slash from neutral -> B", buttons(pad) == [("press", BTN["B"]), ("release", BTN["B"])]
       and r.option.input == "b", str(pad.log))
-check("aim set before the button", pad.log.index(("axis", "ABS_Y", -32767)) < pad.log.index(("press", "BTN_B")))
+check("aim set before the button", pad.log.index(("axis", LY, -32767)) < pad.log.index(("press", BTN["B"])))
 check("rest after", rest_ok(pad))
 
 # 2. The charge chain: each strong/true charged slash is a Y hold, and the
@@ -98,14 +111,14 @@ check("charge holds use level_seconds", ex.charge_hold_seconds("lv3") in clock.l
 # 3. Tackle-during-hold: Y down, B tapped while Y is still held, then Y up
 ex, pad, _ = make()
 r = ex.run(ts.call("tackle", direction="none", level="lv2"))
-check("tackle is Y-hold + B", buttons(pad) == [("press", "BTN_Y"), ("press", "BTN_B"),
-                                              ("release", "BTN_B"), ("release", "BTN_Y")], str(buttons(pad)))
+check("tackle is Y-hold + B", buttons(pad) == [("press", BTN["Y"]), ("press", BTN["B"]),
+                                              ("release", BTN["B"]), ("release", BTN["Y"])], str(buttons(pad)))
 check("tackle via charge_1", r.transition.via == "charge_1" and r.transition.to == "tackle_1")
 
 # 4. yb presses both together
 ex, pad, _ = make()
 ex.run(ts.call("rising_slash", direction="none"))
-check("rising_slash is Y+B", buttons(pad)[:2] == [("press", "BTN_Y"), ("press", "BTN_B")], str(buttons(pad)))
+check("rising_slash is Y+B", buttons(pad)[:2] == [("press", BTN["Y"]), ("press", BTN["B"])], str(buttons(pad)))
 
 # 5. A masked move is a no-op + invalid
 ex, pad, _ = make()
@@ -126,15 +139,25 @@ ex.run(ts.call("charged_slash", direction="none", level="lv1"))
 ex.run(ts.call("move", direction="left", duration="short"))
 ex.run(ts.call("camera", yaw="right", amount="small"))
 check("timed tools keep the root", ex.tracker.current == "charged_slash")
-check("camera drives the right stick", ("axis", "ABS_RX", 32767) in pad.log)
+check("camera drives the right stick", ("axis", RX, 32767) in pad.log)
 check("rest after timed", rest_ok(pad))
 
-# 8. Guard / kick use RT on the trigger axis
+# 8. Guard / kick use RT. With the keyboard/mouse backend the `rt` role is
+#    still uncalibrated (configs/keyboard_bindings.yaml has rt: null), so
+#    these must fail LOUDLY rather than silently sending nothing — getting
+#    a wrong-but-quiet guard would be far worse than an error.
 ex, pad, _ = make()
-ex.run(ts.call("guard", duration="short"))
-r = ex.run(ts.call("kick", direction="none"))
-check("guard then kick", r.transition.root_before == "guard" and r.transition.move == "kick")
-check("RT pressed", ("axis", "ABS_RZ", 255) in pad.log and rest_ok(pad))
+if RT is None:
+    try:
+        ex.run(ts.call("guard", duration="short"))
+        check("unbound RT raises", False, "guard silently succeeded with rt unbound")
+    except ValueError as exc:
+        check("unbound RT raises a clear error", "uncalibrated" in str(exc), str(exc)[:80])
+else:
+    ex.run(ts.call("guard", duration="short"))
+    r = ex.run(ts.call("kick", direction="none"))
+    check("guard then kick", r.transition.root_before == "guard" and r.transition.move == "kick")
+    check("RT pressed", ("axis", RT, RT_PRESSED) in pad.log and rest_ok(pad))
 
 # 9. Buttons are released and sticks recentred even if a sleep raises mid-charge
 pad, clock = FakePad(), FakeClock()
@@ -150,7 +173,7 @@ try:
     ex.run(ts.call("charged_slash", direction="none", level="lv3"))  # raises during the Y hold
 except KeyboardInterrupt:
     pass
-check("Y released after an interrupt", buttons(pad) == [("press", "BTN_Y"), ("release", "BTN_Y")]
+check("Y released after an interrupt", buttons(pad) == [("press", BTN["Y"]), ("release", BTN["Y"])]
       and rest_ok(pad), str(pad.log))
 
 print(f"\n{failures} failure(s).")

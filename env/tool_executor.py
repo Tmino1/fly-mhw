@@ -59,13 +59,22 @@ class ToolExecutor:
         self.clock = clock
         self.sleep = sleep
 
-        gp = toolset.gamepad
+        # Either input block has the same shape, so the programs below are
+        # backend-agnostic; keyboard_mouse just names virtual axes where
+        # the gamepad names ABS_*. See docs/risks.md for why the pad is
+        # reference-only on this machine.
+        gp = toolset.keyboard_mouse if toolset.input_backend == "keyboard_mouse" else toolset.gamepad
         self.buttons = {k: code_resolver(v) for k, v in gp["buttons"].items()}
         self.lx = code_resolver(gp["left_stick"]["x"])
         self.ly = code_resolver(gp["left_stick"]["y"])
         self.rx = code_resolver(gp["right_stick"]["x"])
         self.ry = code_resolver(gp["right_stick"]["y"])
-        self.rt = code_resolver(gp["right_trigger"]["code"])
+        # An unbound trigger (keyboard_bindings.yaml still has rt: null)
+        # is carried as None rather than failing at construction — only
+        # the moves that actually need it should break, and they raise a
+        # clear error in _send_input() instead.
+        rt_name = gp["right_trigger"]["code"]
+        self.rt = code_resolver(rt_name) if rt_name is not None else None
         self.rt_pressed = gp["right_trigger"]["pressed"]
         self.timings = toolset.timings
         self._held: set = set()
@@ -97,12 +106,23 @@ class ToolExecutor:
         if direction != "none":
             self.sleep(self.timings["stick_settle_seconds"])
 
+    def _require_rt(self, input: str) -> None:
+        if self.rt is None:
+            raise ValueError(
+                f"input primitive {input!r} needs the right trigger, but this "
+                "weapon config's right_trigger.code is null — the `rt` role is "
+                "still uncalibrated in configs/keyboard_bindings.yaml, so "
+                "guard, kick and the RT side blows can't be sent yet. Run "
+                "scripts/calibrate_keyboard_bindings.py to bind it."
+            )
+
     def rest(self) -> None:
         """Release everything and recentre both sticks."""
         for code in list(self._held):
             self.pad.release(code)
         self._held.clear()
-        self.pad.set_axis(self.rt, 0)
+        if self.rt is not None:
+            self.pad.set_axis(self.rt, 0)
         for axis in (self.lx, self.ly, self.rx, self.ry):
             self.pad.set_axis(axis, 0)
 
@@ -141,10 +161,12 @@ class ToolExecutor:
             self._release("B")
             self._release("Y")
         elif input == "rt_hold":
+            self._require_rt(input)
             self.pad.set_axis(self.rt, self.rt_pressed)
             self.sleep(t["duration_seconds"][args["duration"]])
             self.pad.set_axis(self.rt, 0)
         elif input == "rt_y":
+            self._require_rt(input)
             self._aim(direction)
             self.pad.set_axis(self.rt, self.rt_pressed)
             self.sleep(t["rt_before_y_seconds"])
