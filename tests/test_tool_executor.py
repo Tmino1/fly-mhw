@@ -125,11 +125,12 @@ ex, pad, _ = make()
 r = ex.run(ts.call("strong_wide_slash", direction="none"))
 check("masked move is a no-op", r.invalid and pad.log == [] and ex.tracker.current == "neutral")
 
-# 6. Y tap after a Charged Slash is side_blow_1; overhead_smash is masked there
+# 6. Y tap after a Charged Slash is side_blow_1, so an uncharged
+#    charged_slash (which needs that same y_tap from neutral) is masked
 ex, pad, _ = make()
 ex.run(ts.call("charged_slash", direction="none", level="lv1"))
-check("overhead_smash masked after charged_slash",
-      ex.run(ts.call("overhead_smash", direction="none")).invalid)
+check("uncharged charged_slash masked after charged_slash",
+      ex.run(ts.call("charged_slash", direction="none", level="lv0")).invalid)
 check("side_blow_1 after charged_slash",
       ex.run(ts.call("side_blow_1", direction="none")).transition.move == "side_blow_1")
 

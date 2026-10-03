@@ -128,6 +128,12 @@ class ToolExecutor:
 
     def charge_hold_seconds(self, level: str) -> float:
         t = self.timings
+        # lv0 is "no charge at all" — a real tap. It must NOT be raised to
+        # min_charge_hold_seconds (that floor exists to make lv1+ holds
+        # register), or the uncharged swing drifts toward being a charged
+        # one and lv0 stops meaning anything.
+        if t["level_seconds"].get(level, 0.0) <= 0.0:
+            return t["tap_seconds"]
         return max(t["level_seconds"][level] + t["level_hold_margin_seconds"], t["min_charge_hold_seconds"])
 
     # --- programs ---------------------------------------------------------

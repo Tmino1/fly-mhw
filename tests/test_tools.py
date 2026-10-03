@@ -39,7 +39,7 @@ check("flat index round-trip", all(ts.index_of(ts.call_at(i)) == i for i in rang
 # 3. Factored view
 choices = ts.arg_choices("charged_slash")
 check("factored args", choices == {"direction": ts.arg_choices("dodge")["direction"],
-                                   "level": ["lv1", "lv2", "lv3"]}, str(choices))
+                                   "level": ["lv0", "lv1", "lv2", "lv3"]}, str(choices))
 
 # 4. Call construction/validation
 c = ts.call("strong_charged_slash", direction="forward", level="lv2")
@@ -69,13 +69,13 @@ check("coerce dict", ts.coerce({"tool": "wait", "args": {"duration": "short"}}) 
 tr = MovesetTracker(ts.graph)
 mask = ts.mask(tr, 0.0)
 allowed = {c.name for c, ok in zip(ts.calls(), mask) if ok}
-check("neutral mask", {"overhead_smash", "charged_slash", "wide_slash", "dodge", "move"} <= allowed
+check("neutral mask", {"charged_slash", "wide_slash", "dodge", "move"} <= allowed
       and "strong_charged_slash" not in allowed, str(sorted(allowed)))
 tr.advance_input("y_hold", "release", 0.0, 0.5)
 mask = ts.mask(tr, 1.0)
 allowed = {c.name for c, ok in zip(ts.calls(), mask) if ok}
-check("after charged slash", {"strong_charged_slash", "side_blow_1", "rising_slash_1", "wide_slash"} <= allowed
-      and "overhead_smash" not in allowed, str(sorted(allowed)))
+check("after charged slash", {"strong_charged_slash", "side_blow_1", "rising_slash_1", "wide_slash"} <= allowed,
+      str(sorted(allowed)))
 # After a dodge, a Y *tap* is the chart's "Y after dodge" Tackle, pinned
 # to lv1 by the edge; a charged tackle is still reachable, but only by
 # re-rooting through neutral's Y hold (dodge_out doesn't claim y_hold)

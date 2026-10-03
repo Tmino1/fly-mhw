@@ -57,8 +57,21 @@ nodes:
   - {id: charge_3, kind: charge, notes: "Chart: 'Charge 3 (if from SCS: skip Lv1)'."}
 
   # --- moves (each `move` is a tool name in greatsword_tools.yaml) ------
-  - {id: overhead_smash, move: overhead_smash, motion_values: [48]}
-  - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120}}
+  # overhead_smash REMOVED 2026-10-02 — it was never a real move. The
+  # chart's "Overhead Smash" is just a Charged Slash released before any
+  # charge stage, and the live check proved it: a y_tap and a 0.35s
+  # y_hold produced the byte-identical animation sequence (lmt_id
+  # 49276/84 -> 49304/65). Keeping both made the action space carry a
+  # duplicate and would have made IL labels ambiguous, since the same
+  # animation could be labelled either way. The Great Sword's three
+  # charged attacks are the sequential charged_slash ->
+  # strong_charged_slash -> true_charged_slash, each individually
+  # chargeable through three red-flash stages (lv1/lv2/lv3).
+  # lmt_ids measured live 2026-10-02 (Y-hold sweep): the charge levels are
+  # consecutive ids, so a demo's recorded lmtID pins the level exactly.
+  # scripts/audit_tool_labels.py can check labels against these.
+  - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120},
+     lmt_ids: {lv0: 49276, lv1: 49304, lv2: 49305, lv3: 49306}, verified: live}
   - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131}}
   - {id: true_charged_slash, move: true_charged_slash, duration_s: 3.0, returns_to: neutral,
      motion_values: {lv1: "15+120 / power 144", lv2: "20+175 / power 210", lv3: "22+211 / power 264"},
@@ -104,7 +117,11 @@ nodes:
 # Tackle reached without any charge is always level lv1.
 edges:
   # From neutral
-  - {from: neutral, input: y_tap, to: overhead_smash, source: chart}
+  # A bare tap is a Charged Slash released before any red flash — the
+  # same swing, zero charge. This replaces the chart's phantom "Overhead
+  # Smash" (deleted 2026-10-02; see the nodes section), and is pinned to
+  # lv0 because the input itself carries no charge level.
+  - {from: neutral, input: y_tap, to: charged_slash, args: {level: lv0}, source: live}
   - {from: neutral, input: y_hold, to: charge_1, source: chart}
   - {from: neutral, input: yb, to: rising_slash, source: chart}
   - {from: neutral, input: b, to: wide_slash, source: chart}
@@ -122,7 +139,6 @@ edges:
   - {from: dodge_out, input: b, to: wide_slash, source: chart}
 
   # Charge 1 finishers and their follow-ups
-  - {from: overhead_smash, input: y_hold, to: charge_2, source: chart}
   - {from: charged_slash, input: y_tap, to: side_blow_1, source: chart}
   - {from: charged_slash, input: yb, to: rising_slash_1, source: chart}
   - {from: charged_slash, input: y_hold, to: charge_2, source: chart}
@@ -171,7 +187,6 @@ candidates:
   - {from: side_blow_2, input: y_hold, to: charge_3}
   - {from: rising_slash_2, input: y_hold, to: charge_3}
   - {from: jumping_wide_slash, input: yb, to: rising_slash_1}
-  - {from: rising_slash, input: y_tap, to: overhead_smash}
   - {from: rising_slash, input: y_hold, to: charge_1}
   - {from: side_blow_1, continues_as: wide_slash,
      notes: "The chart's top row appears to route Side Blow 1 to the 'Wide Slash' loop-return circle too."}

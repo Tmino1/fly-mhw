@@ -4,9 +4,12 @@ event timelines in, tool-call labels out. No game, no evdev.
 
     python tests/test_tool_segmenter.py
 
-Timings used by the real configs (placeholders, see
-configs/weapons/greatsword_tools.yaml): tap_max 0.3s, yb window 0.08s,
-level_seconds lv1 0 / lv2 0.75 / lv3 1.5, move short 0.4 / long 1.0.
+Charge-hold durations are DERIVED from the live config's level_seconds
+rather than hardcoded, because those thresholds are still placeholders
+awaiting live measurement of the red-flash timings — this suite should
+test the segmenter's classification logic, not a particular guess at
+the numbers. Other timings (tap_max 0.3s, yb window 0.08s, move short
+0.4 / long 1.0) come from configs/weapons/greatsword_tools.yaml.
 """
 
 import sys
@@ -51,20 +54,35 @@ def calls(labels, kinds=None):
 ATTACKS = ("y_tap", "y_hold", "b", "yb", "rt_hold", "rt_y", "a", "x", "unrepresentable")
 
 # 1. Tap vs hold levels, from neutral
-check("Y tap -> overhead_smash", calls(run(press("y", 0, 0.1)), ATTACKS) == ["overhead_smash(direction=none)"])
-for hold, lv in [(0.5, "lv1"), (1.0, "lv2"), (1.7, "lv3")]:
+check("Y tap -> uncharged charged_slash", calls(run(press("y", 0, 0.1)), ATTACKS)
+      == ["charged_slash(direction=none, level=lv0)"], str(calls(run(press("y", 0, 0.1)), ATTACKS)))
+# A hold comfortably inside each level's band: past that level's
+# threshold, short of the next one's.
+LVS = ts.timings["level_seconds"]
+def mid(lv, nxt):
+    return (LVS[lv] + LVS[nxt]) / 2 if nxt else LVS[lv] + 0.3
+for hold, lv in [(mid("lv1", "lv2"), "lv1"), (mid("lv2", "lv3"), "lv2"), (mid("lv3", None), "lv3")]:
     got = calls(run(press("y", 0, hold)), ATTACKS)
     check(f"Y hold {hold}s -> charged_slash {lv}", got == [f"charged_slash(direction=none, level={lv})"], str(got))
 
 # 2. The full charged chain: three holds -> charged / strong / true charged slash
-keys = press("y", 0, 0.5) + press("y", 1.0, 2.0) + press("y", 2.5, 4.2)
+# Spaced so each hold starts only after the previous one ends —
+# derived durations are long enough that fixed start times would
+# overlap and merge into one segment.
+keys, t = [], 0.0
+for _lv, _nxt in [("lv1", "lv2"), ("lv2", "lv3"), ("lv3", None)]:
+    _h = mid(_lv, _nxt)
+    keys += press("y", t, t + _h)
+    t += _h + 0.5
 labels = [l for l in run(keys) if l.input in ATTACKS]
 check("charge chain", [l.call.name for l in labels] == ["charged_slash", "strong_charged_slash", "true_charged_slash"],
       str(calls(labels)))
 check("charge chain depth", [l.graph["depth"] for l in labels] == [1, 2, 3])
 
 # 3. LMB hold + RMB during the hold -> tackle at the level reached then
-got = run(press("y", 0, 1.2) + press("b", 0.9, 1.0))
+# RMB pressed once the hold has passed lv2 but not lv3 -> tackle at lv2.
+tackle_at = mid("lv2", "lv3")
+got = run(press("y", 0, tackle_at + 0.2) + press("b", tackle_at, tackle_at + 0.1))
 check("hold + RMB -> tackle lv2", calls(got, ATTACKS) == ["tackle(direction=none, level=lv2)"], str(calls(got)))
 
 # 4. Near-simultaneous LMB+RMB -> yb -> rising_slash

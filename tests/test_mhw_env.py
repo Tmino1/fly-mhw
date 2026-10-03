@@ -92,7 +92,7 @@ i = next(k for k, d in enumerate(avail) if d.startswith("y_hold/release"))
 _, _, _, _, info = env.step(RelativeAction(i, {"direction": "none", "level": "lv2"}))
 check("relative action follows the chain", info["moveset"]["move"] == "strong_charged_slash", str(info["moveset"]))
 
-_, _, _, _, info = env.step(env.toolset.call("overhead_smash", direction="none"))
+_, _, _, _, info = env.step(env.toolset.call("side_blow_1", direction="none"))
 check("masked call is a no-op", info["invalid_call"] and info["moveset"]["from"] == "strong_charged_slash")
 
 idx = env.toolset.index_of(env.toolset.call("wait", duration="short"))

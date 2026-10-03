@@ -97,13 +97,36 @@ timings:
   tap_seconds: 0.15
   dodge_tap_seconds: 0.1
   stick_settle_seconds: 0.05   # stick set before the button, so the move reads the aim
-  # Hold time at which each charge level is reached. The executor holds
-  # level_seconds[level] + level_hold_margin_seconds; the segmenter
-  # classifies a human hold by the same thresholds. GS over-charges
-  # (drops back) if held well past lv3, so keep the margin small.
-  level_seconds: {lv1: 0.0, lv2: 0.75, lv3: 1.5}
-  level_hold_margin_seconds: 0.15
-  min_charge_hold_seconds: 0.35   # the shortest hold the executor sends for a lv1 charge
+  # Hold time at which each charge level is reached — lv1/lv2/lv3 are the
+  # three RED FLASH stages, and each of the three sequential charged
+  # attacks (charged_slash -> strong_charged_slash -> true_charged_slash)
+  # charges through all three independently (user, 2026-10-02). The
+  # executor holds level_seconds[level] + level_hold_margin_seconds; the
+  # segmenter classifies a human hold by the same thresholds. GS
+  # over-charges (drops back) if held well past lv3, so keep the margin
+  # small.
+  #
+  # MEASURED LIVE 2026-10-02 by sweeping Y-hold length and reading the
+  # resulting player.action.lmt_id. The charge levels turned out to be
+  # consecutive animation ids, which makes them unambiguous to audit:
+  #     49276/84  uncharged (lv0)   hold 0.15s
+  #     49304/65  charge 1  (lv1)   holds 0.4 - 1.4s
+  #     49305/65  charge 2  (lv2)   holds 1.6 - 2.0s
+  #     49306/65  charge 3  (lv3)   holds 2.2 - 2.8s (no overcharge seen
+  #                                 even at 2.8s)
+  # So each threshold below sits at the start of its band; the boundaries
+  # are known to within one sweep step (0.2s). The earlier placeholders
+  # had lv2/lv3 far too early, which made lv1 and lv2 produce the SAME
+  # animation. Re-measure with scripts/ if the game is ever patched.
+  level_seconds: {lv0: 0.0, lv1: 0.3, lv2: 1.5, lv3: 2.1}
+  # Pushes each hold clear of its band's lower edge. lv2's band is the
+  # narrowest (~0.6s), so this can't grow much past 0.3 without lv2 holds
+  # spilling into lv3.
+  level_hold_margin_seconds: 0.25
+  # Floor on a CHARGED hold (lv1+). lv0 is deliberately exempt — it must
+  # stay a real tap, shorter than the first flash, or it stops being
+  # uncharged.
+  min_charge_hold_seconds: 0.35
   tackle_tap_seconds: 0.15
   yb_hold_seconds: 0.15
   rt_before_y_seconds: 0.1
@@ -114,7 +137,11 @@ timings:
 arg_values:
   direction: [none, forward, forward_right, right, back_right, back, back_left, left, forward_left]
   move_direction: [forward, forward_right, right, back_right, back, back_left, left, forward_left]
-  level: [lv1, lv2, lv3]
+  # lv0 = released before any red flash: a bare tap, the uncharged swing.
+  # It's a real outcome (measured live: lmt_id 49276/84 -> 49304/65, the
+  # same animation the deleted "Overhead Smash" produced) and humans use
+  # it constantly, so demos need something to label it as.
+  level: [lv0, lv1, lv2, lv3]
   duration: [short, long]
   yaw: [left, right]
   amount: [small, large]
@@ -125,7 +152,6 @@ arg_values:
 #               changes the combo root (only the combo window expiring does).
 # `args` maps each arg name to an arg_values set.
 tools:
-  - {name: overhead_smash, kind: graph, args: {direction: direction}}
   - {name: charged_slash, kind: graph, args: {direction: direction, level: level}}
   - {name: strong_charged_slash, kind: graph, args: {direction: direction, level: level}}
   - {name: true_charged_slash, kind: graph, args: {direction: direction, level: level}}

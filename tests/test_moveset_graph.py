@@ -87,7 +87,7 @@ check("unclaimed input re-roots", rr.move == "wide_slash" and rr.rerooted and rr
 tr = MovesetTracker(g)
 tr.advance_input("y_hold", "release", 0.0, 0.5)
 late = tr.advance_input("y_tap", None, 60.0)
-check("expired window", late.expired and late.root_before == "neutral" and late.move == "overhead_smash",
+check("expired window", late.expired and late.root_before == "neutral" and late.move == "charged_slash",
       str(late.to_dict()))
 
 # 8. Tackle skips a tier: charge_1 tackle -> hold Y -> Strong Charged Slash
@@ -134,7 +134,9 @@ check("neutral can't strong-wide-slash", "strong_wide_slash" not in tr.available
 tr.advance_input("y_hold", "release", 0.0, 0.5)
 tr.advance_input("y_hold", "release", 1.0, 1.5)
 check("SCS can strong-wide-slash", "strong_wide_slash" in tr.available_moves(2.0))
-check("SCS can't overhead-smash (y_tap is claimed)", "overhead_smash" not in tr.available_moves(2.0))
+# After an SCS a y_tap is claimed by side_blow_2, so it can't be an
+# uncharged charged_slash from neutral — the re-root must not win here.
+check("SCS y_tap is claimed by side_blow_2", "side_blow_2" in tr.available_moves(2.0))
 
 # 13. Candidate edges are ignored by the tracker
 tr = MovesetTracker(g)
