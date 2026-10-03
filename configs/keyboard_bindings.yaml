@@ -8,15 +8,15 @@ notes: >
   events into tool calls, and the moveset graph decides which move each
   one was. See demos/keyboard_bindings.py.
 
-  move_*, y, b, a: carried over from the v1 file, which was written from
-  the user's own reported bindings in chat (2026-09-19), not captured via
-  scripts/calibrate_keyboard_bindings.py. x: KEY_E comes from the Iceborne
-  moveset chart's Mouse & Keyboard column (E = Sheathe) — the chart's
-  default, not confirmed as the user's own binding. rt (guard / side
-  blow / kick), rb (sprint) and lt (slinger) are UNCALIBRATED: until
-  they're bound, guard/kick/RT side blows can't be recorded, and
-  sprint/slinger use can't be flagged. Re-run the calibration script to
-  fill them in (and to replace hand-edited codes with live-captured ones).
+  move_*, y, b, a: carried over from the v1 file, written from the user's
+  own reported bindings in chat (2026-09-19); move_* and y were later
+  exercised live (2026-10-02) through the keyboard/mouse backend, and the
+  user confirmed a (Space) and x (E) directly, so KEY_E is no longer just
+  the Iceborne chart's default. rt (guard) was captured live from this
+  machine's mouse and confirmed in-game the same day — see its own note
+  below. rb (sprint) and lt (slinger) are STILL UNCALIBRATED: until
+  they're bound, sprint/slinger use can't be flagged. Re-run the
+  calibration script to fill them in.
 
   mouse.counts_*: placeholder thresholds — summed mouse REL_X counts per
   camera window (configs/weapons/greatsword_tools.yaml's
@@ -32,7 +32,13 @@ roles:
   b: BTN_RIGHT
   a: KEY_SPACE
   x: KEY_E
-  rt: null
+  # Guard. Captured live 2026-10-02 from this machine's Logitech PRO X and
+  # then confirmed in-game: of the two side buttons, BTN_EXTRA is the one
+  # that holds a steady animation while down (lmt 49153/0 -> 49158/88) and
+  # returns to idle on release — the guard signature. BTN_SIDE (275) also
+  # changes state but does NOT return on release, so it is something else;
+  # don't swap these without re-testing.
+  rt: BTN_EXTRA
   rb: null
   lt: null
 mouse:

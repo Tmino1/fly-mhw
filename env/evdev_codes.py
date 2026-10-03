@@ -53,6 +53,11 @@ VIRTUAL_CODES = {
     "VAXIS_MOVE_Y": -2,
     "VAXIS_CAM_X": -3,
     "VAXIS_CAM_Y": -4,
+    # The right trigger is an analogue axis on a pad but a plain button on
+    # keyboard/mouse, and the executor drives it with set_axis. This axis
+    # maps non-zero -> hold the configured key, zero -> release it, so the
+    # executor's rt_hold/rt_y programs work unchanged on both backends.
+    "VAXIS_RT": -5,
 }
 
 

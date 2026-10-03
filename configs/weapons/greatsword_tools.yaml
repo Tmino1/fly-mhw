@@ -53,22 +53,28 @@ keyboard_mouse:
   move_keys: {forward: KEY_W, back: KEY_S, left: KEY_A, right: KEY_D}
   left_stick: {x: VAXIS_MOVE_X, y: VAXIS_MOVE_Y}
   right_stick: {x: VAXIS_CAM_X, y: VAXIS_CAM_Y}
-  # UNBOUND: keyboard_bindings.yaml still has rt: null, so guard, kick and
-  # the RT side blows can't be sent (or recorded) until it's calibrated.
-  # Fill in the real key and set verified.right_trigger once checked live.
-  right_trigger: {code: null, pressed: 1}
-  # Y/B/A are the user's own reported bindings and were exercised live
-  # (BTN_LEFT produced a real charged slash); movement verified in all
-  # four directions. X (sheathe) is the Iceborne chart's default, not
-  # confirmed as this user's binding. Camera scaling is uncalibrated.
+  # RT is a plain button here, not an analogue axis, so VAXIS_RT holds
+  # `key` for as long as the executor drives the axis non-zero.
+  # BTN_EXTRA identified live 2026-10-02: of the two mouse side buttons it
+  # was the one with the guard signature — a steady animation while held
+  # (lmt 49153/0 idle -> 49158/88 held) that RETURNS to idle on release.
+  # BTN_SIDE also changed state but stayed changed after release, so it's
+  # some other action, not a hold-to-maintain stance.
+  right_trigger: {code: VAXIS_RT, key: BTN_EXTRA, pressed: 1}
+  # All confirmed live 2026-10-02 through ToolExecutor, by watching
+  # player.action.lmt_id change: Y (charged_slash -> 49304/65), B
+  # (wide_slash -> 49258/66), right_trigger (guard -> 49159/89, kick ->
+  # 49263/73), and all four movement directions (correctly antiparallel).
+  # A (Space) and X (E) are the user's own stated bindings. The camera
+  # scaling constant is the one thing still unmeasured.
   verified:
     Y: true
-    B: false
-    A: false
-    X: false
+    B: true
+    A: true
+    X: true
     move_keys: true
     right_stick: false
-    right_trigger: false
+    right_trigger: true
 
 # Left-stick values per direction. Cardinal values are greatsword.yaml's
 # verified ones (forward = stick up = ABS_Y negative); diagonals are the

@@ -67,13 +67,22 @@ class VirtualKeyboardMouse:
         self,
         move_keys: dict[str, int],
         extra_keys: list[int] = (),
+        rt_key: int | None = None,
         name_prefix: str = "fly-mhw virtual",
     ):
         self.move_keys = move_keys
-        key_codes = sorted({*move_keys.values(), *extra_keys})
+        # The key VAXIS_RT holds (this user's guard: BTN_EXTRA, identified
+        # live 2026-10-02 by its hold-steady-then-return animation).
+        self.rt_key = rt_key
+        key_codes = sorted({*move_keys.values(), *extra_keys, *([rt_key] if rt_key else [])})
         # Mouse buttons must live on the device that also reports REL
-        # motion, or libinput won't treat them as mouse buttons.
-        self._mouse_btns = [c for c in key_codes if c in (e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE)]
+        # motion, or libinput won't treat them as mouse buttons. Side
+        # buttons included: this user's guard is one of them (BTN_SIDE /
+        # BTN_EXTRA, captured live from their Logitech PRO X).
+        self._mouse_btns = [
+            c for c in key_codes
+            if c in (e.BTN_LEFT, e.BTN_RIGHT, e.BTN_MIDDLE, e.BTN_SIDE, e.BTN_EXTRA)
+        ]
         self._kbd_keys = [c for c in key_codes if c not in self._mouse_btns]
 
         self._kbd = UInput({e.EV_KEY: self._kbd_keys}, name=f"{name_prefix} keyboard")
@@ -126,6 +135,13 @@ class VirtualKeyboardMouse:
         elif code == VIRTUAL_CODES["VAXIS_CAM_Y"]:
             with self._cam_lock:
                 self._cam["y"] = value
+        elif code == VIRTUAL_CODES["VAXIS_RT"]:
+            if self.rt_key is None:
+                raise ValueError(
+                    "config drives VAXIS_RT but no right_trigger.key is set — "
+                    "the `rt` role is unbound, so guard/kick can't be sent."
+                )
+            self._key(self.rt_key, 1 if value else 0)
         else:
             raise ValueError(
                 f"set_axis got code {code!r}, which isn't one of this backend's "
@@ -227,10 +243,9 @@ def make_backend(toolset):
     km = toolset.keyboard_mouse
     move_keys = {role: resolve_code(name) for role, name in km["move_keys"].items()}
     extra = [resolve_code(n) for n in km["buttons"].values()]
-    rt = km.get("right_trigger", {}).get("code")
-    if rt is not None:
-        extra.append(resolve_code(rt))
-    kbm = VirtualKeyboardMouse(move_keys, extra)
+    rt_name = km.get("right_trigger", {}).get("key")
+    rt_key = resolve_code(rt_name) if rt_name else None
+    kbm = VirtualKeyboardMouse(move_keys, extra, rt_key=rt_key)
     time.sleep(SETTLE_SECONDS)
     return kbm
 
