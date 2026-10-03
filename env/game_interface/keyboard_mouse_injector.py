@@ -86,8 +86,19 @@ class VirtualKeyboardMouse:
         self._kbd_keys = [c for c in key_codes if c not in self._mouse_btns]
 
         self._kbd = UInput({e.EV_KEY: self._kbd_keys}, name=f"{name_prefix} keyboard")
+        # BTN_MIDDLE is DECLARED but never pressed, and that is the point.
+        # libinput turns on middle-button emulation for any mouse without a
+        # physical middle button, and under that emulation pressing left and
+        # right together IS a middle click. The Great Sword's Rising Slash is
+        # exactly that chord (`yb` = LMB+RMB), so on a 2-button virtual mouse
+        # it came out as a middle click, which in MHW opens slinger aim —
+        # observed live 2026-10-02: rising_slash wedged the character in
+        # animation 49453 and every probe after it failed. Declaring the
+        # button makes libinput see a 3-button mouse and leave the chord
+        # alone.
+        mouse_buttons = sorted({*(self._mouse_btns or [e.BTN_LEFT]), e.BTN_MIDDLE})
         self._mouse = UInput(
-            {e.EV_KEY: self._mouse_btns or [e.BTN_LEFT], e.EV_REL: [e.REL_X, e.REL_Y]},
+            {e.EV_KEY: mouse_buttons, e.EV_REL: [e.REL_X, e.REL_Y]},
             name=f"{name_prefix} mouse",
         )
 
