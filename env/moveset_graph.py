@@ -60,6 +60,11 @@ class Node:
     # which is frame-rate dependent and wrong outright when the Great
     # Sword auto-releases a full charge on its own.
     lmt_ids: Optional[dict] = None
+    # The animation's true length (commit -> idle), measured from the
+    # per-tick lmtID log. Recorded for reference only: duration_s is what
+    # the executor waits, and it targets the middle of the window where a
+    # follow-up is ACCEPTED, which opens well before the animation ends.
+    full_animation_s: Optional[float] = None
     verified: str = ""
     notes: str = ""
 
@@ -197,6 +202,7 @@ class MovesetGraph:
                 reachable=raw.get("reachable", True),
                 motion_values=raw.get("motion_values"),
                 lmt_ids=raw.get("lmt_ids"),
+                full_animation_s=raw.get("full_animation_s"),
                 verified=raw.get("verified", ""),
                 notes=raw.get("notes", ""),
             )

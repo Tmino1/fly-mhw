@@ -70,17 +70,18 @@ nodes:
   # lmt_ids measured live 2026-10-02 (Y-hold sweep): the charge levels are
   # consecutive ids, so a demo's recorded lmtID pins the level exactly.
   # scripts/audit_tool_labels.py can check labels against these.
-  # duration_s / combo_window_s measured live 2026-10-02 by varying the
-  # gap between a Charged Slash's release and the follow-up press:
-  # 0.2-0.8s produced another Charged Slash (the input was lost inside
-  # the animation), 1.1-2.0s chained, and from ~2.4s the chain had
-  # expired. So the swing runs ~1.0s and the window is open for ~1.0s
-  # after it. The follow-up MUST come after the animation, never during
-  # — env/tool_executor.py waits it out. (That sweep held no direction,
-  # so what it chained INTO was the Side Blow, not the SCS — see the
-  # forward-direction requirement on strong_charged_slash below.)
+  # TIMINGS MEASURED LIVE 2026-10-02 from state_reader.lua's per-tick
+  # lmtID log (the 1 Hz snapshot can't resolve a ~2s animation).
+  #   full animation: swing starts ~0.35s after release, back to idle at
+  #     2.56s — but a follow-up is accepted well before that.
+  #   chain accepted: 1.1-2.0s after release; 0.2-0.8s was swallowed by
+  #     the animation, ~2.4s had already expired.
+  # duration_s is what env/tool_executor.py waits before the next input,
+  # so it targets the MIDDLE of that accept band rather than the
+  # animation's true end; duration_s + combo_window_s = 2.4 is the
+  # measured expiry the tracker uses.
   - {id: charged_slash, move: charged_slash, motion_values: {lv1: 48, lv2: 77, lv3: 120},
-     duration_s: 1.0, combo_window_s: 1.0,
+     duration_s: 1.5, combo_window_s: 0.9, full_animation_s: 2.56,
      lmt_ids: {lv0: 49276, lv1: 49304, lv2: 49305, lv3: 49306}, verified: live}
   # REQUIRES FORWARD HELD (user, 2026-10-02): a follow-up charge with no
   # direction held produces the Side Blow instead — confirmed live, the
@@ -91,7 +92,13 @@ nodes:
   # that was the Side Blow. lv1 below is measured with forward held;
   # lv0/lv2/lv3 are not measured, so labelling falls back to the hold
   # duration for those.
+  # Measured the same way, and it is NOT the same as the CS: the swing
+  # runs 3.18s to idle (vs 2.56s), and the TCS window opens later and is
+  # narrower — a third press at 1.4s was lost, 1.8/2.2/2.6s all produced
+  # the TCS, and by 3.0s the chain had expired into a fresh Charged
+  # Slash. So duration_s targets the middle of 1.8-2.8.
   - {id: strong_charged_slash, move: strong_charged_slash, motion_values: {lv1: 82, lv2: 111, lv3: 131},
+     duration_s: 2.2, combo_window_s: 0.6, full_animation_s: 3.18,
      lmt_ids: {lv1: 49307}, verified: partial}
   # lv1 id measured live 2026-10-02 at the end of a full
   # CS -> SCS -> TCS chain with forward held, and the user visually
