@@ -296,6 +296,34 @@ class MovesetGraph:
             for finish, fin_edge in self._own.get(target.id, {}).items()
         ]
 
+    def shortest_path_to(self, move: str) -> Optional[list["Option"]]:
+        """BFS over combo roots from the graph root to the first node
+        whose move is `move`, using declared (non-re-rooting) edges only.
+
+        How a move is reached in context — a Strong Wide Slash only
+        exists after a Strong Charged Slash — so anything that drives a
+        move live has to build the chain first. Shared by
+        scripts/verify_tools.py and scripts/probe_moveset.py so they
+        can't disagree about what a move's canonical route is.
+        """
+        from collections import deque
+
+        queue = deque([(self.root, [])])
+        seen = {self.root}
+        while queue:
+            node, path = queue.popleft()
+            for opt in self.options_at(node):
+                if opt.rerooted:
+                    continue
+                if opt.move == move:
+                    return path + [opt]
+                nxt = self.nodes[opt.to]
+                nxt_root = nxt.returns_to or nxt.id
+                if nxt_root not in seen:
+                    seen.add(nxt_root)
+                    queue.append((nxt_root, path + [opt]))
+        return None
+
     def options_at(self, root_id: str) -> list[Option]:
         """Everything doable from root_id, in a stable order: the inputs
         root_id claims first, then neutral's options for the inputs it

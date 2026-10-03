@@ -74,6 +74,12 @@ class ToolSpec:
     def arg_names(self) -> list[str]:
         return [a for a, _ in self.args]
 
+    def arg_values(self, name: str) -> tuple[Any, ...]:
+        for a, values in self.args:
+            if a == name:
+                return values
+        raise KeyError(f"tool {self.name!r} has no arg {name!r}")
+
 
 def _resolve_repo_path(path: str | Path) -> Path:
     p = Path(path)
@@ -173,6 +179,9 @@ class ToolSet:
 
     def tool_names(self) -> list[str]:
         return [t.name for t in self.tools]
+
+    def has_tool(self, name: str) -> bool:
+        return name in self._by_name
 
     def spec(self, name: str) -> ToolSpec:
         try:
