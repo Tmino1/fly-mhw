@@ -23,27 +23,45 @@ adding either.
 ## Status
 
 **Phase 0 (tooling spike) — done, verified live.** State reads
-(`state_reader.lua`), virtual-gamepad input, and screen capture (now
-JPEG, 10x the throughput of the original PNG path) all confirmed working
-against the real game. See `docs/architecture.md`'s Phase 0 table.
+(`state_reader.lua`) and screen capture (JPEG, 10x the throughput of the
+original PNG path) confirmed against the real game.
 
-**Phase 1 (original 8-action `MHWEnv`) — done, verified live, now
-superseded.** The original flat action space (`idle`, movement,
-`attack_1/2`, `dodge`) was fully built and live-verified, catching two
-real bugs along the way (swapped evdev compass aliases, a target-
-selection bug with multiple monster entities). It's superseded by the
-tool-based action space below, but the legacy files
-(`env/action_space.py`, `configs/weapons/greatsword.yaml`,
-`scripts/verify_action_mapping.py`) stay for the old v1 demos.
+**Input injection — keyboard + mouse, fully verified live (2026-10-02).**
+The original virtual *gamepad* does not reach MHW on this machine and the
+attempt was abandoned after exhausting it — see `docs/risks.md` for the
+evidence, including a Wine prefix that registers the pad as a genuine
+XInput device while the game still ignores it. A uinput keyboard/mouse
+works instead, reaching the game via libinput → Hyprland → XWayland. It
+also matches how the human plays and how demos are recorded, removing a
+latent demos-on-keyboard / agent-on-gamepad mismatch. Every binding is
+confirmed live by watching the game's own animation ids.
 
-**Tool-based action space + moveset graph — built, offline-tested,
-NOT verified live yet.** This is the current direction (see
-`docs/architecture.md`'s "Tool-based action space + moveset graph"
-section): move-named tool calls, a Great Sword moveset graph transcribed
-from the Iceborne flowchart that re-roots at the latest move,
-timestamped-event demo recording, and an lmtID-based label audit.
-**Next up:** `verify-tools`, rebinding keys, `audit-tool-labels` over
-real hunts — none of this has touched the live game yet.
+**Tool-based action space + moveset graph — built AND verified live.**
+Move-named tool calls over a Great Sword moveset graph. All 16 reachable
+moves fire correctly, and the full CS → SCS → TCS chain works end to end.
+Two moveset facts are encoded that the chart alone didn't give:
+- a follow-up must come *after* the previous animation, never during
+  (`ToolExecutor` waits it out), and
+- the SCS/TCS require **forward held** — without it the game produces a
+  Side Blow, so those moves are *masked* rather than sent wrong.
+
+**Animation ids: the project's ground truth.** `state_reader.lua` logs
+every change of the player's animation id (`lmtID`) per tick, and those
+ids turn out to identify moves *and* charge levels exactly (consecutive
+ids per level: `charged_slash` lv1/2/3 = 49304/5/6). 16 moveset nodes now
+carry measured ids. Two consequences:
+- **demo labelling reads the charge level instead of guessing it** from
+  how long a key was held — a signal that is frame-rate dependent and
+  outright meaningless when the Great Sword auto-releases a full charge;
+- **move verification is automated** (`scripts/probe_moveset.py`),
+  replacing a per-move "did that play? [y/n]" prompt.
+
+**Demo recording — dry-run tested end to end.** One real hunt recorded
+and labelled: 616 tool calls, combos to depth 4, 1 unresolved. The dry
+run paid for itself by exposing two bugs before a long session, both
+fixed: a crash labelling a move with no charge levels, and that crash
+landing *before* the episode metadata was written, which left a played
+hunt unrecoverable by the relabeler.
 
 **Side infra, done and live-confirmed:**
 - A working **Great Jagras arena quest** (`scripts/patch_arena_quest.py`,
@@ -51,23 +69,65 @@ real hunts — none of this has touched the live game yet.
   around the open world" friction from recording sessions.
 - A **quest-start trigger** (`mod_plugins/QuestStartTrigger` C# plugin +
   `scripts/trigger_quest_start.py`) — starts a hunt without walking to
-  the Handler, confirmed live 2026-09-19. Needed for RL fine-tuning's
-  much higher episode-restart rate.
+  the Handler. Needed for RL fine-tuning's much higher restart rate.
 
-**Not built yet:** Phase 3's imitation-learning training script
-(`training/bootstrap_imitation.py`) was deleted along with the
-connectome brain and hasn't been rebuilt against the new tool-based
-action space. The planned IL→RL fine-tuning technique is
-[Q2RL](https://q2rl.rai-inst.com/) — an early prototype
-(`brain/q_network.py`, done; `training/q_estimation.py`, still tied to
-the deleted connectome brain) is parked pending that IL rebuild.
+### Not built yet (the critical path)
 
-Offline regression suite (no game, no evdev needed except where noted —
-runs on macOS too):
+1. **Demo data.** Only the single dry-run hunt exists. This is wall-clock
+   time someone has to spend playing.
+2. **The imitation-learning trainer.** `training/bootstrap_imitation.py`
+   was deleted with the connectome brain and has not been rebuilt for the
+   tool-based action space. Nothing trains until it is.
+3. **RL fine-tuning**, planned via [Q2RL](https://q2rl.rai-inst.com/).
+   `brain/q_network.py` is done; `training/q_estimation.py` is still tied
+   to the deleted connectome brain and needs porting to whatever policy
+   head the IL rebuild produces.
+
+### Known gaps
+
+- **`rb` (sprint) and `lt` (slinger) are unbound**, so those presses are
+  invisible to the recorder rather than flagged unrepresentable. Slinger
+  and clutch-claw use during a recording gets absorbed into neighbouring
+  labels — mild training-data pollution. Bind them, or avoid those moves
+  while recording.
+- **Mouse camera thresholds are uncalibrated placeholders**, so camera
+  labels may be over/under-counted. Cheap to fix: raw events are kept, so
+  `scripts/relabel_demos.py` re-derives labels with no replay.
+- **An uncharged tap and a lv1 charge share one animation** (49304), so
+  that single distinction still falls back to hold duration. Same for
+  `true_charged_slash` lv2, which has no trustworthy measurement yet.
+- **Per-move timings are measured only for the Charged and Strong Charged
+  Slash.** Other moves still use placeholder durations, so longer chains
+  may mistime.
+
+### Two gotchas that cost hours — read before any live work
+
+- **MHW ignores injected input entirely when its window is not focused**,
+  and typing to a terminal steals focus. Every live script checks focus
+  and aborts rather than recording garbage.
+- **The game reads its own copy of `state_reader.lua`** under `Lua/` — it
+  is not symlinked. A stale copy there silently produced empty animation
+  logs for an hour. Re-copy and `reload state_reader` after editing it.
+
+## Tests
+
+Offline regression suite — no game, no evdev, no network; ~2s:
 
 ```sh
 for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
 ```
+
+A pre-commit hook runs it and blocks the commit on failure. Git doesn't
+ship hooks in a checkout, so enable it once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+What it proves and doesn't: passing means nothing else broke. It does
+NOT mean new code is correct — `scripts/` has no offline coverage, so a
+change there can pass and still be wrong. Live verification against the
+game stays the evidence for anything that drives it.
 
 ## This machine's environment (recorded 2026-09-14)
 
@@ -82,7 +142,13 @@ for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
 - Desktop: Hyprland (wlroots, Wayland) — `mss`/X11-style capture will not
   work here; using `grim` instead (see `env/game_interface/capture.py`).
 - `/dev/uinput` already has an ACL entry granting the current user rw access
-  — no extra permission setup needed for the virtual-gamepad input backend.
+  — no extra permission setup needed for the virtual keyboard/mouse.
+- This user is in the `input` group, needed to READ `/dev/input/eventN`
+  when recording your own play.
+- MHW runs under a Steam Linux Runtime (pressure-vessel) sandbox whose
+  `/dev/input` is a static snapshot taken at launch. That is one reason
+  the virtual gamepad never worked; the keyboard/mouse path avoids it
+  entirely by going through the compositor.
 
 ## Setup
 
@@ -116,9 +182,19 @@ pip install -r requirements.txt
 3. Confirm state is flowing: `nix run .#verify-state-read` — should
    stream a fresh player/monster/quest snapshot every second. `Ctrl-C` to
    stop.
-4. (Optional) Confirm input reaches the game: `nix run
-   .#verify-input-injection` — MHW focused, somewhere harmless. See
-   `docs/modding_setup.md`'s Steam Input note if it doesn't land.
+4. (Optional) Confirm input reaches the game — MHW focused, somewhere
+   harmless, weapon drawn:
+   `python scripts/probe_moveset.py --only charged_slash,wide_slash`
+   It should report `charged_slash lmt=49304` and `wide_slash lmt=49258`.
+   (`nix run .#verify-input-injection` tests the *gamepad*, which does
+   not work on this machine — see `docs/risks.md`.)
+
+Also worth knowing before any live run:
+   - **Hands off the keyboard.** MHW ignores injected input while
+     unfocused, and typing anywhere steals focus. Scripts abort rather
+     than record garbage, but they can only abort what they notice.
+   - **Whiff, don't hit anything,** when measuring timings — hitstop
+     stretches animations.
 
 ## `nix run` apps
 
@@ -135,15 +211,31 @@ nix run .#run-dummy-policy -- \
   --policy idle
 nix run .#calibrate-keyboard-bindings   # keys -> input roles, plus a mouse camera sweep
 nix run .#record-hunt   # zero args needed — defaults to the pilot pair + this machine's MHW install
-nix run .#verify-tools  # live check of each move via its shortest combo path (--chain a,b,c)
+nix run .#verify-tools  # SUPERSEDED by scripts/probe_moveset.py (below) — it asks a human
+                        # "did that play?" per move, which the animation log now answers
 nix run .#audit-tool-labels   # demo labels + moveset graph vs the game's own lmtIDs
 nix run .#relabel-demos       # re-label recorded episodes after a graph/timing change
 nix run .#patch-arena-quest -- --source ... --output ... --quest-id 90099  # see docs/architecture.md
 ```
 
-`scripts/trigger_quest_start.py` doesn't have a `nix run` app yet — invoke
-it directly inside `nix develop`: `python scripts/trigger_quest_start.py
---quest-id 90099`.
+Two scripts have no `nix run` app yet — run them directly (inside
+`nix develop`, or with `.venv/bin/python`):
+
+```sh
+# Start a hunt without walking to the Handler (needs the C# plugin built).
+python scripts/trigger_quest_start.py --quest-id 90099
+
+# Drive every move in the moveset and read back which animation each one
+# actually produced. Replaces verify-tools' per-move y/n prompt. Game
+# focused, weapon drawn, hands off; aborts on lost focus or bad state.
+python scripts/probe_moveset.py                     # every move once
+python scripts/probe_moveset.py --levels            # every charge level too
+python scripts/probe_moveset.py --only charged_slash
+```
+
+It never edits the moveset YAML — it reports, and ids go in after a human
+has looked. That rule exists because a wrong id was twice recorded from a
+confident-looking run.
 
 `nix develop` is still there for anything not wrapped as an app yet (e.g.
 the `tests/` suite, or ad-hoc `python -c "..."` checks).
